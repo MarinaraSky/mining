@@ -40,8 +40,36 @@ class Overlord(Zerg):
         self.delete = []
         print(Zerg.starting_locations)
         for zerg in self.drones:
-            if self.drones[zerg].health <= 0:
-                self.delete.append(zerg)
+            drone = self.drones[zerg]
+            if drone.context:
+                drone.commands = dict()
+                if drone.context.north == "*" and drone.carry < 10:
+                    drone.commands.update({"Mine": 0})
+                elif drone.context.south == "*" and drone.carry < 10:
+                    drone.commands.update({"Mine": 1})
+                elif drone.context.east == "*" and drone.carry < 10:
+                    drone.commands.update({"Mine": 2})
+                elif drone.context.west == "*" and drone.carry < 10:
+                    drone.commands.update({"Mine": 3})
+                elif drone.context.north == "_" and drone.carry > 5:
+                    drone.commands.update({"Return": 0})
+                elif drone.context.south == "_" and drone.carry > 5:
+                    drone.commands.update({"Return": 1})
+                elif drone.context.east == "_" and drone.carry > 5:
+                    drone.commands.update({"Return": 2})
+                elif drone.context.west == "_" and drone.carry > 5:
+                    drone.commands.update({"Return": 3})
+                elif drone.context.north == "~" or drone.context.north == "#":
+                    drone.commands.update({"Avoid": 1})
+                elif drone.context.south == "~" or drone.context.south == "#":
+                    drone.commands.update({"Avoid": 0})
+                elif drone.context.east == "~" or drone.context.east == "#":
+                    drone.commands.update({"Avoid": 3})
+                elif drone.context.west == "~" or drone.context.west == "#":
+                    drone.commands.update({"Avoid": 2})
+
+                if drone.health <= 0:
+                    self.delete.append(zerg)
         for zerg in self.delete:
             self.drones.pop(zerg)
         if Zerg.returns:
@@ -65,7 +93,6 @@ class Overlord(Zerg):
                     self.random_map_id = 0
                 Zerg.deploying[self.random_map_id] = True
             else:
-                self.deploy.append(deploying)
                 result = "NONE"
         else:
             result = "NONE"
@@ -85,24 +112,37 @@ class Drone(Zerg):
         self.carry = 0
         self.steps = 0
         self.map = 0
+        self.context = None
+        self.commands = dict()
 
     def action(self, context):
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         print(self.carry)
         if self.steps == 0 and self.map not in Zerg.starting_locations:
             Zerg.starting_locations[self.map] = "{}, {}".format(context.x, context.y)
-        '''
-        print("North: ", context.north)
-        print("South: ", context.south)
-        print("East: ", context.east)
-        print("West: ", context.west)
-        print("X: ", context.x)
-        print("Y: ", context.y)
-        '''
         if Zerg.starting_locations[self.map] == "{}, {}".format(context.x, context.y):
             Zerg.landing_clear[self.map] = False
         else:
             Zerg.landing_clear[self.map] = True
+        self.context = context
+        print(self.commands)
+        if self.commands:
+            if 'Mine' in self.commands:
+                self.carry += 1
+                direction = self.commands['Mine']
+                self.commands.pop('Mine')
+                return directions.get(direction)
+            elif 'Return' in self.commands:
+                self.carry = 0
+                direction = self.commands['Return']
+                self.commands.pop('Return')
+                Zerg.returns.append(id(self))
+                return directions.get(direction)
+            elif 'Avoid' in self.commands:
+                direction = self.commands['Avoid']
+                self.commands.pop('Avoid')
+                return directions.get(direction)
+        '''
         if context.north == "*" and self.carry < 10:
             self.carry += 1
             return directions.get(0)
@@ -147,6 +187,7 @@ class Drone(Zerg):
         elif context.east == "#":
             self.steps += 1
             return directions.get(2)
+        '''
         random_choice = random.randint(0, 3)  # both arguments are inclusive
         return directions.get(random_choice, "CENTER")
 
