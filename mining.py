@@ -135,15 +135,35 @@ class Overlord(Zerg):
         for zerg in self.drones:
             drone = self.drones[zerg]
             if drone.context:
+                path = None
+                tile = (drone.context.x, drone.context.y)
+                north = (drone.context.x, int(drone.context.y) + 1)
+                south = (drone.context.x, int(drone.context.y) - 1)
+                east = (int(drone.context.x) + 1, drone.context.y)
+                west = (int(drone.context.x) - 1, drone.context.y)
+                if drone.context.north == "*":
+                    Zerg.map_minerals[drone.map] = north
+                if drone.context.south == "*":
+                    Zerg.map_minerals[drone.map] = south
+                if drone.context.east == "*":
+                    Zerg.map_minerals[drone.map] = east
+                if drone.context.west == "*":
+                    Zerg.map_minerals[drone.map] = west
+                if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
+                    print("Starting", Zerg.starting_locations[drone.map])
+                    came_from,  cost_so_far = a_star_search(
+                            Zerg.map_graphs[drone.map],
+                            Zerg.starting_locations[drone.map],
+                            Zerg.map_minerals[drone.map]
+                        )
+                    path = reconstruct_path(came_from,
+                                     Zerg.starting_locations[drone.map],
+                                     Zerg.map_minerals[drone.map])
+                    print("Map: ", drone.map, "\nPath: ", path)
+                #Zerg.map_graphs[drone.map].edges.update({tile: [north, south, east, west]})
                 drone.commands = dict()
-                if drone.context.north == "*" and drone.carry < 10:
-                    drone.commands.update({"Mine": 0})
-                elif drone.context.south == "*" and drone.carry < 10:
-                    drone.commands.update({"Mine": 1})
-                elif drone.context.east == "*" and drone.carry < 10:
-                    drone.commands.update({"Mine": 2})
-                elif drone.context.west == "*" and drone.carry < 10:
-                    drone.commands.update({"Mine": 3})
+                if path:
+                    drone.commands.update({"Mine": path})
                 elif drone.context.north == "_" and drone.carry > 5:
                     drone.commands.update({"Return": 0})
                 elif drone.context.south == "_" and drone.carry > 5:
@@ -160,7 +180,6 @@ class Overlord(Zerg):
                     drone.commands.update({"Avoid": 3})
                 elif drone.context.west == "~" or drone.context.west == "#":
                     drone.commands.update({"Avoid": 2})
-
                 if drone.health <= 0:
                     self.delete.append(zerg)
         for zerg in self.delete:
@@ -206,14 +225,26 @@ class Drone(Zerg):
         self.steps = 0
         self.map = 0
         self.context = None
+        self.path_step = 0
         self.commands = dict()
+
+    def get_direction(self, starting, ending):
+        directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
+        if starting[0] < ending[0]:
+            return directions[3]
+        elif starting[0] > ending[0]:
+            return directions[2]
+        elif starting[1] < ending[1]:
+            return directions[1]
+        elif starting[1] > ending[1]:
+            return directions[0]
 
     def action(self, context):
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         print(self.carry)
         if self.steps == 0 and self.map not in Zerg.starting_locations:
-            Zerg.starting_locations[self.map] = "{}, {}".format(context.x, context.y)
-        if Zerg.starting_locations[self.map] == "{}, {}".format(context.x, context.y):
+            Zerg.starting_locations[self.map] = (context.x, context.y)
+        if Zerg.starting_locations[self.map] == (context.x, context.y):
             Zerg.landing_clear[self.map] = False
         else:
             Zerg.landing_clear[self.map] = True
@@ -221,10 +252,17 @@ class Drone(Zerg):
         print(self.commands)
         if self.commands:
             if 'Mine' in self.commands:
-                self.carry += 1
+                if self.commands['Mine'][-2] == (context.x, context.y):
+                    self.carry += 1
+                    return self.get_direction((context.x, context.y), self.commands['Mine'][-2])
+                else:
+                    self.path_step += 1
+                    return self.get_direction((context.x, context.y), self.commands['Mine'][self.path_step])
+                '''
                 direction = self.commands['Mine']
                 self.commands.pop('Mine')
                 return directions.get(direction)
+            '''
             elif 'Return' in self.commands:
                 self.carry = 0
                 direction = self.commands['Return']
