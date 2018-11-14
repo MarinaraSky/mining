@@ -1,17 +1,109 @@
 import random
 import tkinter
+import heapq
+
 
 class Zerg:
     returns = list()
     starting_locations = dict()
     landing_clear = dict()
     deploying = dict()
+    map_graphs = dict()
+    map_minerals = dict()
 
     def __init__(self, health):
         self.health = health
 
     def action(self):
         pass
+
+
+class Graph():
+    def __init__(self):
+        self.width = 100
+        self.height = 100
+        self.edges = {}
+        self.weights = {}
+        self.walls = []
+
+    def cost(self, from_node, to_node):
+        return self.weights.get(to_node, 1)
+
+    def in_bounds(self, id):
+        (x, y) = id
+        return 0 <= x < self.width and 0 <= y < self.height
+
+    def passable(self, id):
+        return id not in self.walls
+
+    def neighbors(self, id):
+        (x, y) = id
+        results = [(x+1, y), (x, y-1), (x-1, y), (x, y+1)]
+        if (x+y) % 2 == 0:
+            results.reverse()
+        results = filter(self.in_bounds, results)
+        results = filter(self.passable, results)
+        return results
+
+    def __str__(self):
+        output = ""
+        for edge in self.edges:
+            output += str(edge)
+        return output
+
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+
+    def empty(self):
+        return len(self.elements) == 0
+
+    def put(self, item, priority):
+        heapq.heappush(self.elements, (priority, item))
+
+    def get(self):
+        return heapq.heappop(self.elements)[1]
+
+def heuristic(a, b):
+    (x1, y1) = a
+    (x2, y2) = b
+    return abs(x1 - x2) + abs(y1 + y2)
+
+def a_star_search(graph, start, goal):
+    frontier = PriorityQueue()
+    frontier.put(start, 0)
+    came_from = {}
+    cost_so_far = {}
+    came_from[start] = None
+    cost_so_far[start] = 0
+
+    while not frontier.empty():
+        current = frontier.get()
+
+        if current == goal:
+            break
+
+        for next in graph.neighbors(current):
+            new_cost = cost_so_far[current] + graph.cost(current, next)
+            if next not in cost_so_far or new_cost < cost_so_far[next]:
+                cost_so_far[next] = new_cost
+                priority = new_cost + heuristic(goal, next)
+                frontier.put(next, priority)
+                came_from[next] = current
+
+    return came_from, cost_so_far
+
+
+def reconstruct_path(came_from, start, goal):
+    current = goal
+    path = []
+    while current!= start:
+        path.append(current)
+        current = came_from[current]
+    path.append(start)
+    path.reverse()
+    return path
+
 
 class Overlord(Zerg):
     def __init__(self, total_ticks, refined_minerals, dashboard=None):
@@ -32,6 +124,7 @@ class Overlord(Zerg):
 
     def add_map(self, map_id, summary):
         self.maps[map_id] = summary
+        Zerg.map_graphs[map_id] = Graph()
 
     def action(self):
         print("Zergs", self.drones.keys())
