@@ -127,11 +127,7 @@ class Overlord(Zerg):
         Zerg.map_graphs[map_id] = Graph()
 
     def action(self):
-        print("Zergs", self.drones.keys())
-        print("Returns", Zerg.returns)
-        print("Deploy", self.deploy)
         self.delete = []
-        print(Zerg.starting_locations)
         for zerg in self.drones:
             drone = self.drones[zerg]
             if drone.context:
@@ -141,45 +137,48 @@ class Overlord(Zerg):
                 south = (drone.context.x, int(drone.context.y) - 1)
                 east = (int(drone.context.x) + 1, drone.context.y)
                 west = (int(drone.context.x) - 1, drone.context.y)
+                Zerg.map_graphs[drone.map].edges.update({tile: [north, south, east, west]})
                 if drone.context.north == "*":
-                    Zerg.map_minerals[drone.map] = north
-                if drone.context.south == "*":
-                    Zerg.map_minerals[drone.map] = south
-                if drone.context.east == "*":
-                    Zerg.map_minerals[drone.map] = east
-                if drone.context.west == "*":
-                    Zerg.map_minerals[drone.map] = west
+                    Zerg.map_minerals.update({drone.map: north})
+                elif drone.context.south == "*":
+                    Zerg.map_minerals.update({drone.map: south})
+                elif drone.context.east == "*":
+                    Zerg.map_minerals.update({drone.map: east})
+                elif drone.context.west == "*":
+                    Zerg.map_minerals.update({drone.map: west})
+                elif drone.context.north == "#":
+                    Zerg.map_graphs[drone.map].walls.append(north)
+                elif drone.context.south == "#":
+                    Zerg.map_graphs[drone.map].walls.append(south)
+                elif drone.context.east == "#":
+                    Zerg.map_graphs[drone.map].walls.append(east)
+                elif drone.context.west == "#":
+                    Zerg.map_graphs[drone.map].walls.append(west)
                 if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
-                    print("Starting", Zerg.starting_locations[drone.map])
                     came_from,  cost_so_far = a_star_search(
                             Zerg.map_graphs[drone.map],
-                            Zerg.starting_locations[drone.map],
+                            (drone.context.x, drone.context.y),
                             Zerg.map_minerals[drone.map]
                         )
-                    path = reconstruct_path(came_from,
-                                     Zerg.starting_locations[drone.map],
-                                     Zerg.map_minerals[drone.map])
-                    print("Map: ", drone.map, "\nPath: ", path)
-                #Zerg.map_graphs[drone.map].edges.update({tile: [north, south, east, west]})
-                drone.commands = dict()
-                if path:
+                    try:
+                        path = reconstruct_path(came_from,
+                                         Zerg.starting_locations[drone.map],
+                                         Zerg.map_minerals[drone.map])
+                    except:
+                        pass
+                if not drone.commands and path and drone.carry < 10:
+                    print("Giving path")
                     drone.commands.update({"Mine": path})
-                elif drone.context.north == "_" and drone.carry > 5:
-                    drone.commands.update({"Return": 0})
-                elif drone.context.south == "_" and drone.carry > 5:
-                    drone.commands.update({"Return": 1})
-                elif drone.context.east == "_" and drone.carry > 5:
-                    drone.commands.update({"Return": 2})
-                elif drone.context.west == "_" and drone.carry > 5:
-                    drone.commands.update({"Return": 3})
-                elif drone.context.north == "~" or drone.context.north == "#":
-                    drone.commands.update({"Avoid": 1})
-                elif drone.context.south == "~" or drone.context.south == "#":
-                    drone.commands.update({"Avoid": 0})
-                elif drone.context.east == "~" or drone.context.east == "#":
-                    drone.commands.update({"Avoid": 3})
-                elif drone.context.west == "~" or drone.context.west == "#":
-                    drone.commands.update({"Avoid": 2})
+                    Zerg.map_minerals.pop(drone.map)
+                elif not drone.commands and drone.carry >= 3:
+                    came_from, cost_so_far = a_star_search(
+                            Zerg.map_graphs[drone.map],
+                            (drone.context.x, drone.context.y),
+                            Zerg.starting_locations[drone.map])
+                    path = reconstruct_path(came_from,
+                                    (drone.context.x, drone.context.y),
+                                    Zerg.starting_locations[drone.map])
+                    drone.commands.update({"Return": path})
                 if drone.health <= 0:
                     self.delete.append(zerg)
         for zerg in self.delete:
@@ -187,12 +186,14 @@ class Overlord(Zerg):
         if Zerg.returns:
             returning = Zerg.returns.pop()
             result = 'RETURN {}'.format(returning)
-            Zerg.landing_clear[self.drones[returning].map] = True
+            if returning in self.drones:
+                Zerg.landing_clear[self.drones[returning].map] = True
             self.deploy.append(returning)
             self.return_count += 1
         elif self.deploy:
             deploying = self.deploy.pop()
-            self.drones[deploying].map = self.random_map_id
+            if deploying in self.drones:
+                self.drones[deploying].map = self.random_map_id
             if self.random_map_id not in Zerg.landing_clear:
                 Zerg.landing_clear[self.random_map_id] = True
             if self.random_map_id not in Zerg.deploying:
@@ -205,6 +206,7 @@ class Overlord(Zerg):
                     self.random_map_id = 0
                 Zerg.deploying[self.random_map_id] = True
             else:
+                self.deploy.append(deploying)
                 result = "NONE"
         else:
             result = "NONE"
@@ -213,7 +215,6 @@ class Overlord(Zerg):
         self.dashboard.log.insert(tkinter.END, "\n")
         self.dashboard.log.see(tkinter.END)
         self.dashboard.log.config(state=tkinter.DISABLED)
-        print("Return count: ", self.return_count)
         return result
 
 class Drone(Zerg):
@@ -240,8 +241,10 @@ class Drone(Zerg):
             return directions[0]
 
     def action(self, context):
+        if self.map in Zerg.map_minerals:
+            print("Minerals I see: ", Zerg.map_minerals[self.map])
+        print("Commands: ", self.commands)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
-        print(self.carry)
         if self.steps == 0 and self.map not in Zerg.starting_locations:
             Zerg.starting_locations[self.map] = (context.x, context.y)
         if Zerg.starting_locations[self.map] == (context.x, context.y):
@@ -249,26 +252,49 @@ class Drone(Zerg):
         else:
             Zerg.landing_clear[self.map] = True
         self.context = context
-        print(self.commands)
+        if context.north == "*" and self.carry < 10:
+            self.carry += 1
+            return directions.get(0)
+        elif context.south == "*" and self.carry < 10:
+            self.carry += 1
+            return directions.get(1)
+        elif context.east == "*" and self.carry < 10:
+            self.carry += 1
+            return directions.get(2)
+        elif context.east == "*" and self.carry < 10:
+            self.carry += 1
+            return directions.get(3)
         if self.commands:
             if 'Mine' in self.commands:
-                if self.commands['Mine'][-2] == (context.x, context.y):
-                    self.carry += 1
-                    return self.get_direction((context.x, context.y), self.commands['Mine'][-2])
+                goto = "Center"
+                if len(self.commands['Mine']) > 0:
+                    goto = self.get_direction(self.commands['Mine'].pop(0), (context.x, context.y))
+                print("Commands: ", self.commands)
+                if self.commands and len(self.commands['Mine']) == 0:
+                    if self.map in Zerg.map_minerals:
+                        Zerg.map_minerals.pop(self.map)
+                    self.commands.pop('Mine')
                 else:
-                    self.path_step += 1
-                    return self.get_direction((context.x, context.y), self.commands['Mine'][self.path_step])
+                    self.carry += 1
+
+                return goto
                 '''
                 direction = self.commands['Mine']
                 self.commands.pop('Mine')
                 return directions.get(direction)
             '''
             elif 'Return' in self.commands:
-                self.carry = 0
-                direction = self.commands['Return']
-                self.commands.pop('Return')
-                Zerg.returns.append(id(self))
-                return directions.get(direction)
+                goto = "Center"
+                if len(self.commands['Return']) > 0:
+                    goto = self.get_direction(self.commands['Return'].pop(0), (context.x, context.y))
+                if len(self.commands['Return']) == 0:
+                    self.carry = 0
+                    self.path_step = 0
+                    Zerg.returns.append(id(self))
+                    self.commands.pop('Return')
+
+                return goto
+
             elif 'Avoid' in self.commands:
                 direction = self.commands['Avoid']
                 self.commands.pop('Avoid')
@@ -319,7 +345,10 @@ class Drone(Zerg):
             self.steps += 1
             return directions.get(2)
         '''
+        zerg_directions = [context.north, context.south, context.east, context.west]
         random_choice = random.randint(0, 3)  # both arguments are inclusive
+        if zerg_directions[random_choice] == "#" or zerg_directions[random_choice] == "~":
+            return "CENTER"
         return directions.get(random_choice, "CENTER")
 
 class Dashboard(tkinter.Toplevel):
