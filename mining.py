@@ -109,6 +109,7 @@ class Overlord(Zerg):
     def __init__(self, total_ticks, refined_minerals, dashboard=None):
         super().__init__(100)
         self.dashboard = dashboard
+        self.total_ticks = total_ticks
         self.maps = {}
         self.drones = {}
         self.deploy = list()
@@ -128,6 +129,7 @@ class Overlord(Zerg):
 
     def action(self):
         self.delete = []
+        self.total_ticks -= 1
         for zerg in self.drones:
             drone = self.drones[zerg]
             if drone.context:
@@ -138,21 +140,22 @@ class Overlord(Zerg):
                 east = (int(drone.context.x) + 1, drone.context.y)
                 west = (int(drone.context.x) - 1, drone.context.y)
                 Zerg.map_graphs[drone.map].edges.update({tile: [north, south, east, west]})
+                drone.last_tile = tile
                 if drone.context.north == "*":
                     Zerg.map_minerals.update({drone.map: north})
-                elif drone.context.south == "*":
+                if drone.context.south == "*":
                     Zerg.map_minerals.update({drone.map: south})
-                elif drone.context.east == "*":
+                if drone.context.east == "*":
                     Zerg.map_minerals.update({drone.map: east})
-                elif drone.context.west == "*":
+                if drone.context.west == "*":
                     Zerg.map_minerals.update({drone.map: west})
-                elif drone.context.north == "#":
+                if drone.context.north == "#":
                     Zerg.map_graphs[drone.map].walls.append(north)
-                elif drone.context.south == "#":
+                if drone.context.south == "#":
                     Zerg.map_graphs[drone.map].walls.append(south)
-                elif drone.context.east == "#":
+                if drone.context.east == "#":
                     Zerg.map_graphs[drone.map].walls.append(east)
-                elif drone.context.west == "#":
+                if drone.context.west == "#":
                     Zerg.map_graphs[drone.map].walls.append(west)
                 if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
                     came_from,  cost_so_far = a_star_search(
@@ -162,15 +165,11 @@ class Overlord(Zerg):
                         )
                     try:
                         path = reconstruct_path(came_from,
-                                         Zerg.starting_locations[drone.map],
+                                         tile,
                                          Zerg.map_minerals[drone.map])
                     except:
                         pass
-                if not drone.commands and path and drone.carry < 10:
-                    print("Giving path")
-                    drone.commands.update({"Mine": path})
-                    Zerg.map_minerals.pop(drone.map)
-                elif not drone.commands and drone.carry >= 3:
+                if (not drone.commands and drone.carry != 0) or ('Return' not in drone.commands and self.total_ticks < 15):
                     came_from, cost_so_far = a_star_search(
                             Zerg.map_graphs[drone.map],
                             (drone.context.x, drone.context.y),
@@ -179,6 +178,11 @@ class Overlord(Zerg):
                                     (drone.context.x, drone.context.y),
                                     Zerg.starting_locations[drone.map])
                     drone.commands.update({"Return": path})
+                elif not drone.commands and path and drone.carry < 10:
+                    drone.commands.update({"Mine": path})
+                    Zerg.map_minerals.pop(drone.map)
+                elif not drone.commands:
+                    drone.commands.update({"Discover": None})
                 if drone.health <= 0:
                     self.delete.append(zerg)
         for zerg in self.delete:
@@ -190,7 +194,7 @@ class Overlord(Zerg):
                 Zerg.landing_clear[self.drones[returning].map] = True
             self.deploy.append(returning)
             self.return_count += 1
-        elif self.deploy:
+        elif self.deploy and self.total_ticks > 15:
             deploying = self.deploy.pop()
             if deploying in self.drones:
                 self.drones[deploying].map = self.random_map_id
@@ -218,15 +222,20 @@ class Overlord(Zerg):
         return result
 
 class Drone(Zerg):
+
+    last_bias = 0
+
     def __init__(self):
         super().__init__(40)
         self.moves = 1
+        self.last_tile = None
         self.capacity = 10
         self.carry = 0
         self.steps = 0
         self.map = 0
         self.context = None
-        self.path_step = 0
+        self.bias = Drone.last_bias % 4
+        Drone.last_bias += 1
         self.commands = dict()
 
     def get_direction(self, starting, ending):
@@ -241,9 +250,10 @@ class Drone(Zerg):
             return directions[0]
 
     def action(self, context):
-        if self.map in Zerg.map_minerals:
-            print("Minerals I see: ", Zerg.map_minerals[self.map])
+        #if self.map in Zerg.map_minerals:
+            #print("Minerals I see: ", Zerg.map_minerals[self.map])
         print("Commands: ", self.commands)
+        #print("Carring:  ", self.carry)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         if self.steps == 0 and self.map not in Zerg.starting_locations:
             Zerg.starting_locations[self.map] = (context.x, context.y)
@@ -251,17 +261,25 @@ class Drone(Zerg):
             Zerg.landing_clear[self.map] = False
         else:
             Zerg.landing_clear[self.map] = True
+        self.steps += 1
+        if self.steps % 25 == 0:
+            self.bias = Drone.last_bias % 4
+            Drone.last_bias += 1
         self.context = context
         if context.north == "*" and self.carry < 10:
+            self.commands = dict()
             self.carry += 1
             return directions.get(0)
         elif context.south == "*" and self.carry < 10:
+            self.commands = dict()
             self.carry += 1
             return directions.get(1)
         elif context.east == "*" and self.carry < 10:
+            self.commands = dict()
             self.carry += 1
             return directions.get(2)
         elif context.east == "*" and self.carry < 10:
+            self.commands = dict()
             self.carry += 1
             return directions.get(3)
         if self.commands:
@@ -269,7 +287,6 @@ class Drone(Zerg):
                 goto = "Center"
                 if len(self.commands['Mine']) > 0:
                     goto = self.get_direction(self.commands['Mine'].pop(0), (context.x, context.y))
-                print("Commands: ", self.commands)
                 if self.commands and len(self.commands['Mine']) == 0:
                     if self.map in Zerg.map_minerals:
                         Zerg.map_minerals.pop(self.map)
@@ -295,10 +312,17 @@ class Drone(Zerg):
 
                 return goto
 
-            elif 'Avoid' in self.commands:
-                direction = self.commands['Avoid']
-                self.commands.pop('Avoid')
-                return directions.get(direction)
+            elif 'Discover' in self.commands:
+                self.commands.pop('Discover')
+                if self.bias == 0:
+                    return Drone.north_bias(self.last_tile, context, directions)
+                elif self.bias == 1:
+                    return Drone.south_bias(self.last_tile, context, directions)
+                elif self.bias == 2:
+                    return Drone.east_bias(self.last_tile, context, directions)
+                elif self.bias == 3:
+                    return Drone.west_bias(self.last_tile, context, directions)
+
         '''
         if context.north == "*" and self.carry < 10:
             self.carry += 1
@@ -350,6 +374,61 @@ class Drone(Zerg):
         if zerg_directions[random_choice] == "#" or zerg_directions[random_choice] == "~":
             return "CENTER"
         return directions.get(random_choice, "CENTER")
+
+
+    def north_bias(last_tile, context, directions):
+        allowed = " "
+        if context.north in allowed and context.y + 1 != last_tile[1]:
+            return directions.get(0)
+        elif context.east in allowed and context.x + 1 != last_tile[0]:
+            return directions.get(2)
+        elif context.south in allowed and context.y - 1 != last_tile[1]:
+            return directions.get(1)
+        elif context.west in allowed and context.x - 1 != last_tile[0]:
+            return directions.get(3)
+        else:
+            return "Center"
+
+    def south_bias(last_tile, context, directions):
+        allowed = " "
+        if context.south in allowed and context.y - 1 != last_tile[1]:
+            return directions.get(1)
+        elif context.west in allowed and context.x - 1 != last_tile[0]:
+            return directions.get(3)
+        elif context.north in allowed and context.y + 1 != last_tile[1]:
+            return directions.get(0)
+        elif context.east in allowed and context.x + 1 != last_tile[0]:
+            return directions.get(2)
+        else:
+            return "Center"
+
+
+    def east_bias(last_tile, context, directions):
+        allowed = " "
+        if context.east in allowed and context.x + 1 != last_tile[0]:
+            return directions.get(2)
+        elif context.north in allowed and context.y + 1 != last_tile[1]:
+            return directions.get(0)
+        elif context.west in allowed and context.x - 1 != last_tile[0]:
+            return directions.get(3)
+        elif context.south in allowed and context.y - 1 != last_tile[1]:
+            return directions.get(1)
+        else:
+            return "Center"
+
+    def west_bias(last_tile, context, directions):
+        allowed = " "
+        if context.west in allowed and context.x - 1 != last_tile[0]:
+            return directions.get(3)
+        elif context.north in allowed and context.y + 1 != last_tile[1]:
+            return directions.get(0)
+        elif context.east in allowed and context.x + 1 != last_tile[0]:
+            return directions.get(2)
+        elif context.south in allowed and context.y - 1 != last_tile[1]:
+            return directions.get(1)
+        else:
+            return "Center"
+
 
 class Dashboard(tkinter.Toplevel):
      def __init__(self, parent):
