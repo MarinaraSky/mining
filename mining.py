@@ -20,8 +20,8 @@ class Zerg:
 
 class Graph():
     def __init__(self):
-        self.width = 100
-        self.height = 100
+        self.width = 200
+        self.height = 200
         self.edges = {}
         self.weights = {}
         self.walls = []
@@ -139,8 +139,9 @@ class Overlord(Zerg):
                 south = (drone.context.x, int(drone.context.y) - 1)
                 east = (int(drone.context.x) + 1, drone.context.y)
                 west = (int(drone.context.x) - 1, drone.context.y)
-                Zerg.map_graphs[drone.map].edges.update({tile: [north, south, east, west]})
+                Zerg.map_graphs[drone.map].edges.update({tile: list()})
                 drone.last_tile = tile
+                allowed = " ~"
                 if drone.context.north == "*":
                     Zerg.map_minerals.update({drone.map: north})
                 if drone.context.south == "*":
@@ -157,10 +158,18 @@ class Overlord(Zerg):
                     Zerg.map_graphs[drone.map].walls.append(east)
                 if drone.context.west == "#":
                     Zerg.map_graphs[drone.map].walls.append(west)
+                if drone.context.north in allowed:
+                    Zerg.map_graphs[drone.map].edges[tile].append(north)
+                if drone.context.south in allowed:
+                    Zerg.map_graphs[drone.map].edges[tile].append(south)
+                if drone.context.east in allowed:
+                    Zerg.map_graphs[drone.map].edges[tile].append(east)
+                if drone.context.west in allowed:
+                    Zerg.map_graphs[drone.map].edges[tile].append(west)
                 if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
                     came_from,  cost_so_far = a_star_search(
                             Zerg.map_graphs[drone.map],
-                            (drone.context.x, drone.context.y),
+                            tile,
                             Zerg.map_minerals[drone.map]
                         )
                     try:
@@ -169,13 +178,20 @@ class Overlord(Zerg):
                                          Zerg.map_minerals[drone.map])
                     except:
                         pass
-                if (not drone.commands and drone.carry != 0) or ('Return' not in drone.commands and self.total_ticks < 15):
+                if drone.commands:
+                    outdated = list()
+                    for key in drone.commands:
+                        if drone.last_tile != tile:
+                            outdated.append(key)
+                    for item in outdated:
+                        drone.commands.pop(item)
+                if (not drone.commands and drone.carry > 7) or ('Return' not in drone.commands and self.total_ticks < 25):
                     came_from, cost_so_far = a_star_search(
                             Zerg.map_graphs[drone.map],
-                            (drone.context.x, drone.context.y),
+                            tile,
                             Zerg.starting_locations[drone.map])
                     path = reconstruct_path(came_from,
-                                    (drone.context.x, drone.context.y),
+                                    tile,
                                     Zerg.starting_locations[drone.map])
                     drone.commands.update({"Return": path})
                 elif not drone.commands and path and drone.carry < 10:
@@ -252,19 +268,21 @@ class Drone(Zerg):
     def action(self, context):
         #if self.map in Zerg.map_minerals:
             #print("Minerals I see: ", Zerg.map_minerals[self.map])
-        print("Commands: ", self.commands)
+        #print("Commands: ", self.commands)
         #print("Carring:  ", self.carry)
+        #print(Zerg.map_graphs[self.map])
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
-        if self.steps == 0 and self.map not in Zerg.starting_locations:
+        neighbors = {0: context.north, 1: context.south, 2: context.east, 3: context.west}
+        if self.map not in Zerg.starting_locations:
             Zerg.starting_locations[self.map] = (context.x, context.y)
         if Zerg.starting_locations[self.map] == (context.x, context.y):
             Zerg.landing_clear[self.map] = False
         else:
             Zerg.landing_clear[self.map] = True
         self.steps += 1
-        if self.steps % 25 == 0:
-            self.bias = Drone.last_bias % 4
+        if neighbors[self.bias] == "#":
             Drone.last_bias += 1
+            self.bias = Drone.last_bias % 4
         self.context = context
         if context.north == "*" and self.carry < 10:
             self.commands = dict()
@@ -323,61 +341,15 @@ class Drone(Zerg):
                 elif self.bias == 3:
                     return Drone.west_bias(self.last_tile, context, directions)
 
-        '''
-        if context.north == "*" and self.carry < 10:
-            self.carry += 1
-            return directions.get(0)
-        elif context.south == "*" and self.carry < 10:
-            self.carry += 1
-            return directions.get(1)
-        elif context.east == "*" and self.carry < 10:
-            self.carry += 1
-            return directions.get(2)
-        elif context.east == "*" and self.carry < 10:
-            self.carry += 1
-            return directions.get(3)
-        if context.north == "_" and self.carry > 5:
-            self.carry = 0
-            self.steps += 1
-            Zerg.returns.append(id(self))
-            return directions.get(0)
-        elif context.south == "_" and self.carry > 5:
-            self.carry = 0
-            self.steps += 1
-            Zerg.returns.append(id(self))
-            return directions.get(1)
-        elif context.east == "_" and self.carry > 5:
-            self.carry = 0
-            self.steps += 1
-            Zerg.returns.append(id(self))
-            return directions.get(2)
-        elif context.east == "_" and self.carry > 5:
-            self.carry = 0
-            self.steps += 1
-            Zerg.returns.append(id(self))
-            return directions.get(3)
-        if context.north == "#":
-            self.steps += 1
-            return directions.get(1)
-        elif context.south == "#":
-            self.steps += 1
-            return directions.get(0)
-        elif context.east == "#":
-            self.steps += 1
-            return directions.get(3)
-        elif context.east == "#":
-            self.steps += 1
-            return directions.get(2)
-        '''
-        zerg_directions = [context.north, context.south, context.east, context.west]
-        random_choice = random.randint(0, 3)  # both arguments are inclusive
-        if zerg_directions[random_choice] == "#" or zerg_directions[random_choice] == "~":
-            return "CENTER"
-        return directions.get(random_choice, "CENTER")
+        #zerg_directions = [context.north, context.south, context.east, context.west]
+        #random_choice = random.randint(0, 3)  # both arguments are inclusive
+        #if zerg_directions[random_choice] == "#" or zerg_directions[random_choice] == "~":
+            #return "CENTER"
+        return "CENTER"
 
 
     def north_bias(last_tile, context, directions):
-        allowed = " "
+        allowed = " ~"
         if context.north in allowed and context.y + 1 != last_tile[1]:
             return directions.get(0)
         elif context.east in allowed and context.x + 1 != last_tile[0]:
@@ -390,7 +362,7 @@ class Drone(Zerg):
             return "Center"
 
     def south_bias(last_tile, context, directions):
-        allowed = " "
+        allowed = " ~"
         if context.south in allowed and context.y - 1 != last_tile[1]:
             return directions.get(1)
         elif context.west in allowed and context.x - 1 != last_tile[0]:
@@ -404,7 +376,7 @@ class Drone(Zerg):
 
 
     def east_bias(last_tile, context, directions):
-        allowed = " "
+        allowed = " ~"
         if context.east in allowed and context.x + 1 != last_tile[0]:
             return directions.get(2)
         elif context.north in allowed and context.y + 1 != last_tile[1]:
@@ -417,15 +389,15 @@ class Drone(Zerg):
             return "Center"
 
     def west_bias(last_tile, context, directions):
-        allowed = " "
+        allowed = " ~"
         if context.west in allowed and context.x - 1 != last_tile[0]:
             return directions.get(3)
-        elif context.north in allowed and context.y + 1 != last_tile[1]:
-            return directions.get(0)
-        elif context.east in allowed and context.x + 1 != last_tile[0]:
-            return directions.get(2)
         elif context.south in allowed and context.y - 1 != last_tile[1]:
             return directions.get(1)
+        elif context.east in allowed and context.x + 1 != last_tile[0]:
+            return directions.get(2)
+        elif context.north in allowed and context.y + 1 != last_tile[1]:
+            return directions.get(0)
         else:
             return "Center"
 
