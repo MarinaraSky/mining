@@ -10,6 +10,7 @@ class Zerg:
     landing_clear = dict()
     deploying = dict()
     map_graphs = dict()
+    map_print_graphs = dict()
     map_minerals = dict()
 
     def __init__(self, health):
@@ -51,8 +52,9 @@ class Graph():
         return results
 
     def __str__(self):
-        output = "\n"
-        output.join(['\t'.join([str(cell) for cell in row]) for row in self.edges])
+        output = ""
+        for edge in self.edges:
+            output += str(edge)
         return output
 
 class Queue:
@@ -148,6 +150,13 @@ class Overlord(Zerg):
         self.random_map_id = 0
         self.return_count = 0
         self.drop_zone_count = 0
+        self.map_dashboards = list()
+        for x in range(3):
+            self.map_dashboards.append(Dashboard(self.dashboard))
+            dash_title = "MAP {}".format(x)
+            self.map_dashboards[x].title(dash_title)
+            #self.map_dashboards[x].log = tkinter.Text(self.map_dashboards[x], height=100,  width=100)
+            self.map_dashboards[x].log.forget()
         #TODO make logic to create zerg horde
         drone_count = int(refined_minerals / 9)
         for value in range(drone_count):
@@ -158,6 +167,8 @@ class Overlord(Zerg):
     def add_map(self, map_id, summary):
         self.maps[map_id] = summary
         Zerg.map_graphs[map_id] = Graph()
+        width, height = 100, 100;
+        Zerg.map_print_graphs[map_id] = [[tkinter.Frame(self.map_dashboards[map_id], height=10, width=10, bg='black') for x in range(width)] for y in range(height)]
 
     def action(self):
         self.delete = []
@@ -194,12 +205,90 @@ class Overlord(Zerg):
                 result = "NONE"
         else:
             result = "NONE"
+        self.update_dashboard(self.dashboard, result)
+        return result
+
+    def update_dashboard(self, dashboard, result):
+        grid_row = 10 
+        grid_column = 0
+        '''
+        for dash in range(3):
+            for graph, grid in Zerg.map_print_graphs.items():
+                for row in grid:
+                    for label in row:
+                        label.grid(row=grid_row, column=grid_column)
+                        grid_column += 1
+                    grid_row -= 1
+                    grid_column = 0
+                grid_row = 10
+
+                    self.map_dashboards[dash].log.config(state=tkinter.NORMAL)
+                    self.map_dashboards[dash].log.insert(tkinter.END, row)
+                    self.map_dashboards[dash].log.insert(tkinter.END, "\n")
+                    self.map_dashboards[dash].log.see(tkinter.END)
+                    self.map_dashboards[dash].log.config(state=tkinter.DISABLED)
+                    self.map_dashboards[dash].log.pack()
+
+'''
         self.dashboard.log.config(state=tkinter.NORMAL)
         self.dashboard.log.insert(tkinter.END, result)
         self.dashboard.log.insert(tkinter.END, "\n")
         self.dashboard.log.see(tkinter.END)
         self.dashboard.log.config(state=tkinter.DISABLED)
-        return result
+
+    def update_display(self, drone, north, south, east, west):
+            Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].config(bg='magenta2')
+            if drone.context.north == "#":
+                Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gray50')
+            elif drone.context.north == "~":
+                Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='lawn green')
+            elif drone.context.north == "*":
+                Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='blue')
+            elif drone.context.north == "_":
+                Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gold')
+            else:
+                Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='sandy brown')
+
+            Zerg.map_print_graphs[drone.map][north[1]][north[0]].grid(row=north[1], column=north[0])
+
+            if drone.context.south == "#":
+                Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gray50')
+            elif drone.context.south == "~":
+                Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='lawn green')
+            elif drone.context.south == "*":
+                Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='blue')
+            elif drone.context.south == "_":
+                Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gold')
+            else:
+                Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='sandy brown')
+
+            Zerg.map_print_graphs[drone.map][south[1]][south[0]].grid(row=south[1], column=south[0])
+
+            if drone.context.east == "#":
+                Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gray50')
+            elif drone.context.east == "~":
+                Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='lawn green')
+            elif drone.context.east == "*":
+                Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='blue')
+            elif drone.context.east == "_":
+                Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gold')
+            else:
+                Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='sandy brown')
+
+            Zerg.map_print_graphs[drone.map][east[1]][east[0]].grid(row=east[1], column=east[0])
+
+            if drone.context.west == "#":
+                Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gray50')
+            elif drone.context.west == "~":
+                Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='lawn green')
+            elif drone.context.west == "*":
+                Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='blue')
+            elif drone.context.west == "_":
+                Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gold')
+            else:
+                Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='sandy brown')
+
+            Zerg.map_print_graphs[drone.map][west[1]][west[0]].grid(row=west[1], column=west[0])
 
     def get_drone_info(self, drone):
         if drone.context:
@@ -209,7 +298,7 @@ class Overlord(Zerg):
             south = (drone.context.x, int(drone.context.y) - 1)
             east = (int(drone.context.x) + 1, drone.context.y)
             west = (int(drone.context.x) - 1, drone.context.y)
-            Zerg.map_graphs[drone.map].edges.update({tile: list()})
+            #Zerg.map_graphs[drone.map].edges.update({tile: list()})
             if drone.last_tile == tile:
                 drone.commands = dict()
             else:
@@ -239,14 +328,7 @@ class Overlord(Zerg):
                 Zerg.map_graphs[drone.map].acid.append(east)
             if drone.context.west == "~":
                 Zerg.map_graphs[drone.map].acid.append(west)
-            if drone.context.north in allowed:
-                Zerg.map_graphs[drone.map].edges[tile].append(north)
-            if drone.context.south in allowed:
-                Zerg.map_graphs[drone.map].edges[tile].append(south)
-            if drone.context.east in allowed:
-                Zerg.map_graphs[drone.map].edges[tile].append(east)
-            if drone.context.west in allowed:
-                Zerg.map_graphs[drone.map].edges[tile].append(west)
+            self.update_display(drone, north, south, east, west)
             if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
                 came_from,  cost_so_far = a_star_search(
                         Zerg.map_graphs[drone.map],
@@ -316,7 +398,6 @@ class Drone(Zerg):
             #print("Minerals I see: ", Zerg.map_minerals[self.map])
         #jprint("Commands: ", self.commands)
         #print("Carring:  ", self.carry)
-        print(Zerg.map_graphs[self.map])
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         neighbors = {0: context.north, 1: context.south, 2: context.east, 3: context.west}
         if self.map not in Zerg.starting_locations:
