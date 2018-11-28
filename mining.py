@@ -235,7 +235,7 @@ class Overlord(Zerg):
         elif drone.context.north == "_":
             Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gold')
         elif drone.context.north == " ":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='sandy brown')
+            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='grey60')
 
         Zerg.map_print_graphs[drone.map][north[1]][north[0]].grid(row=north[1], column=north[0])
 
@@ -248,7 +248,7 @@ class Overlord(Zerg):
         elif drone.context.south == "_":
             Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gold')
         elif drone.context.south == " ":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='sandy brown')
+            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='grey60')
 
         Zerg.map_print_graphs[drone.map][south[1]][south[0]].grid(row=south[1], column=south[0])
 
@@ -261,7 +261,7 @@ class Overlord(Zerg):
         elif drone.context.east == "_":
             Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gold')
         elif drone.context.west == " ":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='sandy brown')
+            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='grey60')
 
         Zerg.map_print_graphs[drone.map][east[1]][east[0]].grid(row=east[1], column=east[0])
 
@@ -274,7 +274,7 @@ class Overlord(Zerg):
         elif drone.context.west == "_":
             Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gold')
         elif drone.context.west == " ":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='sandy brown')
+            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='grey60')
 
         Zerg.map_print_graphs[drone.map][west[1]][west[0]].grid(row=west[1], column=west[0])
         Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].config(bg='magenta2')
@@ -288,7 +288,6 @@ class Overlord(Zerg):
             south = (drone.context.x, int(drone.context.y) - 1)
             east = (int(drone.context.x) + 1, drone.context.y)
             west = (int(drone.context.x) - 1, drone.context.y)
-            #Zerg.map_graphs[drone.map].edges.update({tile: list()})
             Zerg.map_graphs[drone.map].visited.add(tile)
             if drone.last_tile == tile:
                 drone.commands = dict()
@@ -334,7 +333,9 @@ class Overlord(Zerg):
             self.update_display(drone, north, south, east, west)
             Zerg.map_graphs[drone.map].unvisited = sorted(list(set(Zerg.map_graphs[drone.map].unvisited).difference(Zerg.map_graphs[drone.map].visited)))
             if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
-               path = a_star_search(Zerg.map_graphs[drone.map], tile, Zerg.map_minerals[drone.map])
+                path = a_star_search(Zerg.map_graphs[drone.map], tile, Zerg.map_minerals[drone.map])
+                if tile == path[0]:
+                    path.pop(0)
             if drone.commands:
                 outdated = list()
                 for key in drone.commands:
@@ -348,8 +349,10 @@ class Overlord(Zerg):
                     path.pop(0)
                 drone.commands.update({"Return": path})
             elif not drone.commands and path and drone.carry < 10:
-                drone.commands.update({"Mine": path})
-                Zerg.map_minerals.pop(drone.map)
+                if Zerg.map_minerals[drone.map] in Zerg.map_graphs[drone.map].visited:
+                    Zerg.map_minerals.pop(drone.map)
+                else:
+                    drone.commands.update({"Mine": path})
             elif 'Discover' not in drone.commands:
                 if len(Zerg.map_graphs[drone.map].unvisited) > 0:
                     if self.last_discovery % 2 == 0:
@@ -437,8 +440,6 @@ class Drone(Zerg):
                 if len(self.commands['Mine']) > 0:
                     goto = self.get_direction(self.commands['Mine'].pop(0), (context.x, context.y))
                 if self.commands and len(self.commands['Mine']) == 0:
-                    if self.map in Zerg.map_minerals:
-                        Zerg.map_minerals.pop(self.map)
                     self.commands.pop('Mine')
                 else:
                     self.carry += 1
