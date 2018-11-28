@@ -129,22 +129,30 @@ def a_star_search(graph, start, goal):
 class Overlord(Zerg):
     def __init__(self, total_ticks, refined_minerals, dashboard=None):
         super().__init__(100)
-        self.dashboard = dashboard
-        self.total_ticks = total_ticks
-        self.maps = {}
-        self.drones = {}
-        self.deploy = list()
-        self.random_map_id = 0
-        self.return_count = 0
-        self.drop_zone_count = 0
-        self.map_dashboards = list()
-        self.last_discovery = 0
+        self.dashboard = dashboard      # Display object
+        self.total_ticks = total_ticks  # Keeps track of ticks remaining
+        self.maps = {}                  # Dict of maps by id
+        self.drones = {}                # Dict of drones by id
+        self.deploy = list()            # List of drones to deploy
+        self.random_map_id = 0          # Which map to deploy to
+        self.return_count = 0           # How many drones waiting for return
+        self.map_dashboards = list()    # List of Tkinter windows for maps
+        self.last_discovery = 0         # Variance for discovery
+
+        screen_position = "300x200+{}+{}"   # Screen placement for map windows
+        screen_x = 300
+        screen_y = 500
         for x in range(3):
             self.map_dashboards.append(Dashboard(self.dashboard))
+            self.map_dashboards[x].geometry(screen_position.format(screen_x, screen_y))
+            screen_x += 300
+
             dash_title = "MAP {}".format(x)
             self.map_dashboards[x].title(dash_title)
-            #self.map_dashboards[x].log = tkinter.Text(self.map_dashboards[x], height=100,  width=100)
             self.map_dashboards[x].log.forget()
+            del self.map_dashboards[x].log
+            self.map_dashboards[x].log = tkinter.Text(self.map_dashboards[x], height=10,  width=30)
+            self.map_dashboards[x].log.grid(row=110, column=0, columnspan=100)
         #TODO make logic to create zerg horde
         drone_count = int(refined_minerals / 9)
         for value in range(drone_count):
@@ -156,7 +164,7 @@ class Overlord(Zerg):
         self.maps[map_id] = summary
         Zerg.map_graphs[map_id] = Graph()
         width, height = 100, 100;
-        Zerg.map_print_graphs[map_id] = [[tkinter.Frame(self.map_dashboards[map_id], height=10, width=10, bg='black') for x in range(width)] for y in range(height)]
+        Zerg.map_print_graphs[map_id] = [[tkinter.Frame(self.map_dashboards[map_id], height=12, width=12, bg='black') for x in range(width)] for y in range(height)]
 
     def action(self):
         self.delete = []
@@ -172,21 +180,22 @@ class Overlord(Zerg):
             if returning in self.drones:
                 Zerg.landing_clear[self.drones[returning].map] = True
             self.deploy.append(returning)
+            self.drones[returning].deployed = False
             self.return_count += 1
         elif self.deploy and self.total_ticks > 15:
             deploying = self.deploy.pop()
-            if deploying in self.drones:
-                self.drones[deploying].map = self.random_map_id
             if self.random_map_id not in Zerg.landing_clear:
                 Zerg.landing_clear[self.random_map_id] = True
             if self.random_map_id not in Zerg.deploying:
                 Zerg.deploying[self.random_map_id] = False
             if Zerg.landing_clear[self.random_map_id] == True:
                 result = 'DEPLOY {} {}'.format(deploying, self.random_map_id)
+                self.drones[deploying].map = self.random_map_id
                 if self.random_map_id < 2:
                     self.random_map_id += 1
                 else:
                     self.random_map_id = 0
+                self.drones[deploying].deployed = True
                 Zerg.deploying[self.random_map_id] = True
             else:
                 self.deploy.append(deploying)
@@ -197,35 +206,29 @@ class Overlord(Zerg):
         return result
 
     def update_dashboard(self, dashboard, result):
-        grid_row = 10 
-        grid_column = 0
-        '''
         for dash in range(3):
-            for graph, grid in Zerg.map_print_graphs.items():
-                for row in grid:
-                    for label in row:
-                        label.grid(row=grid_row, column=grid_column)
-                        grid_column += 1
-                    grid_row -= 1
-                    grid_column = 0
-                grid_row = 10
+            self.map_dashboards[dash].log.config(state=tkinter.NORMAL)
+            self.map_dashboards[dash].log.delete('1.0', tkinter.END)
+            self.map_dashboards[dash].log.config(state=tkinter.DISABLED)
+        for drone_id, drone in self.drones.items():
+            if drone.deployed == True:
+                drone_string = "{}({}): {}".format(drone_id, drone.map, list(drone.commands))
+                self.map_dashboards[drone.map].log.config(state=tkinter.NORMAL)
+                self.map_dashboards[drone.map].log.insert(tkinter.END, drone_string)
+                self.map_dashboards[drone.map].log.insert(tkinter.END, "\n")
+                self.map_dashboards[drone.map].log.see(tkinter.END)
+                self.map_dashboards[drone.map].log.config(state=tkinter.DISABLED)
+                self.map_dashboards[drone.map].log.grid()
 
-                    self.map_dashboards[dash].log.config(state=tkinter.NORMAL)
-                    self.map_dashboards[dash].log.insert(tkinter.END, row)
-                    self.map_dashboards[dash].log.insert(tkinter.END, "\n")
-                    self.map_dashboards[dash].log.see(tkinter.END)
-                    self.map_dashboards[dash].log.config(state=tkinter.DISABLED)
-                    self.map_dashboards[dash].log.pack()
-
-'''
         self.dashboard.log.config(state=tkinter.NORMAL)
+        self.dashboard.log.delete('1.0', tkinter.END)
         self.dashboard.log.insert(tkinter.END, result)
         self.dashboard.log.insert(tkinter.END, "\n")
         self.dashboard.log.see(tkinter.END)
         self.dashboard.log.config(state=tkinter.DISABLED)
 
     def update_display(self, drone, north, south, east, west):
-        Zerg.map_print_graphs[drone.map][drone.last_tile[1]][drone.last_tile[0]].config(bg='sandy brown')
+        #Zerg.map_print_graphs[drone.map][drone.last_tile[1]][drone.last_tile[0]].config(bg='sandy brown')
         if drone.context.north == "#":
             Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gray50')
         elif drone.context.north == "~":
@@ -237,7 +240,7 @@ class Overlord(Zerg):
         elif drone.context.north == " ":
             Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='grey60')
 
-        Zerg.map_print_graphs[drone.map][north[1]][north[0]].grid(row=north[1], column=north[0])
+        Zerg.map_print_graphs[drone.map][north[1]][north[0]].grid(row=north[1], column=north[0], sticky='NW')
 
         if drone.context.south == "#":
             Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gray50')
@@ -250,7 +253,7 @@ class Overlord(Zerg):
         elif drone.context.south == " ":
             Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='grey60')
 
-        Zerg.map_print_graphs[drone.map][south[1]][south[0]].grid(row=south[1], column=south[0])
+        Zerg.map_print_graphs[drone.map][south[1]][south[0]].grid(row=south[1], column=south[0], sticky='NW')
 
         if drone.context.east == "#":
             Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gray50')
@@ -263,7 +266,7 @@ class Overlord(Zerg):
         elif drone.context.west == " ":
             Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='grey60')
 
-        Zerg.map_print_graphs[drone.map][east[1]][east[0]].grid(row=east[1], column=east[0])
+        Zerg.map_print_graphs[drone.map][east[1]][east[0]].grid(row=east[1], column=east[0], sticky='NW')
 
         if drone.context.west == "#":
             Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gray50')
@@ -276,9 +279,9 @@ class Overlord(Zerg):
         elif drone.context.west == " ":
             Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='grey60')
 
-        Zerg.map_print_graphs[drone.map][west[1]][west[0]].grid(row=west[1], column=west[0])
+        Zerg.map_print_graphs[drone.map][west[1]][west[0]].grid(row=west[1], column=west[0], sticky='NW')
         Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].config(bg='magenta2')
-        Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].grid(row=drone.context.y, column=drone.context.x)
+        #Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].grid(row=drone.context.y, column=drone.context.x)
 
     def get_drone_info(self, drone):
         if drone.context:
@@ -382,9 +385,10 @@ class Drone(Zerg):
         self.health = 40
         self.carry = 0
         self.steps = 0
-        self.map = 0
+        self.map = -1
         self.context = None
         self.bias = Drone.last_bias % 4
+        self.deployed = False
         Drone.last_bias += 1
         self.commands = dict()
 
@@ -539,7 +543,7 @@ class Drone(Zerg):
 class Dashboard(tkinter.Toplevel):
      def __init__(self, parent):
         super().__init__(parent)
-        self.geometry("300x200+300+0")
+        self.geometry("300x200+300+200")
         self.title("Overlord's Dashboard")
         self.log = tkinter.Text(self, height=10,  width=30)
         self.log.pack()
