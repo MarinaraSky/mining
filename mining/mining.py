@@ -362,8 +362,8 @@ class Overlord(Zerg):
                         outdated.append(key)
                 for item in outdated:
                     drone.commands.pop(item)
-            if (not drone.commands and drone.carry > 7)
-            or ('Return' not in drone.commands and self.total_ticks < 25):
+            if (not drone.commands and drone.carry > 7) or \
+                    ('Return' not in drone.commands and self.total_ticks < 25):
                 path = a_star_search(
                         Zerg.map_graphs[drone.map], tile,
                         Zerg.starting_locations[drone.map])
@@ -474,8 +474,8 @@ class Drone(Zerg):
                 goto = "Center"
                 if len(self.commands['Return']) > 0:
                     to_tile = self.commands['Return'].pop(0)
-                    if to_tile == (context.x, context.y)
-                    and len(self.commands['Return']) > 0:
+                    if to_tile == (context.x, context.y)\
+                            and len(self.commands['Return']) > 0:
                         to_tile = self.commands['Return'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
                 if Zerg.starting_locations[self.map] == (context.x, context.y):
@@ -490,8 +490,8 @@ class Drone(Zerg):
                 goto = "Center"
                 if self.commands['Discover']:
                     to_tile = self.commands['Discover'].pop(0)
-                    if to_tile == (context.x, context.y)
-                    and len(self.commands['Discover']) > 0:
+                    if to_tile == (context.x, context.y)\
+                            and len(self.commands['Discover']) > 0:
                         to_tile = self.commands['Discover'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
                     return goto
