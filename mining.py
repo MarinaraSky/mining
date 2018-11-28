@@ -5,13 +5,13 @@ import collections
 
 
 class Zerg:
-    returns = list()
-    starting_locations = dict()
-    landing_clear = dict()
-    deploying = dict()
-    map_graphs = dict()
-    map_print_graphs = dict()
-    map_minerals = dict()
+    returns = list()            # List of zergs for return
+    starting_locations = dict()     # Dict of starting locations by map id
+    landing_clear = dict()      # Dict of bools signaling clear landing pads
+    deploying = dict()          # Dict of zergs being deployed by id
+    map_graphs = dict()         # Dict of graph objects by map id
+    map_display = dict()   # Dict of frames for map displays
+    map_minerals = dict()       # Dict of minerals per map by id
 
     def __init__(self, health):
         self.health = health
@@ -19,17 +19,25 @@ class Zerg:
     def action(self):
         pass
 
+'''
+    Graph, PriorityQueue, heuristic, and a_star_search was implemented
+    based on the following website. Code was modified in places to fit
+    the needs of the program.
+
+    Source:
+    https://www.redblobgames.com/pathfinding/a-star/implementation.html
+'''
+
 
 class Graph():
     def __init__(self):
-        self.width = 200
+        self.width = 200    # Twice as big as needed to accomodate odd coords
         self.height = 200
-        self.edges = {}
-        self.weights = {}
-        self.walls = []
-        self.acid = []
-        self.visited = set()
-        self.unvisited = list()
+        self.weights = {}   # Dict of weights for nodes, Acid = 4, ground = 1
+        self.walls = []     # List of walls to avoid
+        self.acid = []      # List of acid tiles for weights
+        self.visited = set()    # Set of visited tiles
+        self.unvisited = list()  # List of visitalbe tiles yet to be explored
 
     def cost(self, from_node, to_node):
         weight = 1
@@ -59,18 +67,6 @@ class Graph():
             output += str(edge)
         return output
 
-class Queue:
-    def __init__(self):
-        self.elements = collections.deque()
-
-    def empty(self):
-        return len(self.elements) == 0
-
-    def put(self, x):
-        self.elements.append(x)
-
-    def get(self):
-        return self.elements.popleft()
 
 class PriorityQueue:
     def __init__(self):
@@ -85,6 +81,7 @@ class PriorityQueue:
     def get(self):
         return heapq.heappop(self.elements)[1]
 
+
 def heuristic(a, b):
     (x1, y1) = a
     (x2, y2) = b
@@ -92,6 +89,9 @@ def heuristic(a, b):
 
 
 def a_star_search(graph, start, goal):
+    '''
+    Combined a_star_search and reconstruct path from above source
+    '''
     frontier = PriorityQueue()
     frontier.put(start, 0)
     came_from = {}
@@ -115,15 +115,12 @@ def a_star_search(graph, start, goal):
 
     current = goal
     path = []
-    while current!= start:
+    while current != start:
         path.append(current)
         current = came_from[current]
     path.append(start)
     path.reverse()
     return path
-
-
-#def reconstruct_path(came_from, start, goal):
 
 
 class Overlord(Zerg):
@@ -142,18 +139,20 @@ class Overlord(Zerg):
         screen_position = "300x200+{}+{}"   # Screen placement for map windows
         screen_x = 300
         screen_y = 500
-        for x in range(3):
+        for x in range(3):  # Initializes the map windows
             self.map_dashboards.append(Dashboard(self.dashboard))
-            self.map_dashboards[x].geometry(screen_position.format(screen_x, screen_y))
+            self.map_dashboards[x].geometry(
+                    screen_position.format(screen_x, screen_y))
             screen_x += 300
 
             dash_title = "MAP {}".format(x)
             self.map_dashboards[x].title(dash_title)
             self.map_dashboards[x].log.forget()
             del self.map_dashboards[x].log
-            self.map_dashboards[x].log = tkinter.Text(self.map_dashboards[x], height=10,  width=30)
+            self.map_dashboards[x].log = tkinter.Text(
+                    self.map_dashboards[x], height=10,  width=30)
             self.map_dashboards[x].log.grid(row=110, column=0, columnspan=100)
-        #TODO make logic to create zerg horde
+        # TODO make logic to create zerg horde
         drone_count = int(refined_minerals / 9)
         for value in range(drone_count):
             z = Drone()
@@ -163,8 +162,11 @@ class Overlord(Zerg):
     def add_map(self, map_id, summary):
         self.maps[map_id] = summary
         Zerg.map_graphs[map_id] = Graph()
-        width, height = 100, 100;
-        Zerg.map_print_graphs[map_id] = [[tkinter.Frame(self.map_dashboards[map_id], height=12, width=12, bg='black') for x in range(width)] for y in range(height)]
+        width, height = 100, 100
+        Zerg.map_display[map_id] = [[
+            tkinter.Frame(
+                self.map_dashboards[map_id], height=12, width=12, bg='black')
+            for x in range(width)] for y in range(height)]
 
     def action(self):
         self.delete = []
@@ -188,7 +190,7 @@ class Overlord(Zerg):
                 Zerg.landing_clear[self.random_map_id] = True
             if self.random_map_id not in Zerg.deploying:
                 Zerg.deploying[self.random_map_id] = False
-            if Zerg.landing_clear[self.random_map_id] == True:
+            if Zerg.landing_clear[self.random_map_id] is True:
                 result = 'DEPLOY {} {}'.format(deploying, self.random_map_id)
                 self.drones[deploying].map = self.random_map_id
                 if self.random_map_id < 2:
@@ -211,13 +213,16 @@ class Overlord(Zerg):
             self.map_dashboards[dash].log.delete('1.0', tkinter.END)
             self.map_dashboards[dash].log.config(state=tkinter.DISABLED)
         for drone_id, drone in self.drones.items():
-            if drone.deployed == True:
-                drone_string = "{}({}): {}".format(drone_id, drone.map, list(drone.commands))
+            if drone.deployed is True:
+                drone_string = "{}({}): {}".format(
+                        drone_id, drone.map, list(drone.commands))
                 self.map_dashboards[drone.map].log.config(state=tkinter.NORMAL)
-                self.map_dashboards[drone.map].log.insert(tkinter.END, drone_string)
+                self.map_dashboards[drone.map].log.insert(
+                        tkinter.END, drone_string)
                 self.map_dashboards[drone.map].log.insert(tkinter.END, "\n")
                 self.map_dashboards[drone.map].log.see(tkinter.END)
-                self.map_dashboards[drone.map].log.config(state=tkinter.DISABLED)
+                self.map_dashboards[drone.map].log.config(
+                        state=tkinter.DISABLED)
                 self.map_dashboards[drone.map].log.grid()
 
         self.dashboard.log.config(state=tkinter.NORMAL)
@@ -228,60 +233,63 @@ class Overlord(Zerg):
         self.dashboard.log.config(state=tkinter.DISABLED)
 
     def update_display(self, drone, north, south, east, west):
-        #Zerg.map_print_graphs[drone.map][drone.last_tile[1]][drone.last_tile[0]].config(bg='sandy brown')
-        if drone.context.north == "#":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gray50')
-        elif drone.context.north == "~":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='lawn green')
-        elif drone.context.north == "*":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='blue')
-        elif drone.context.north == "_":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='gold')
-        elif drone.context.north == " ":
-            Zerg.map_print_graphs[drone.map][north[1]][north[0]].config(bg='grey60')
+        x_coord = drone.context.x
+        y_coord = drone.context.y
+        print_north = Zerg.map_display[drone.map][north[1]][north[0]]
+        print_south = Zerg.map_display[drone.map][south[1]][south[0]]
+        print_east = Zerg.map_display[drone.map][east[1]][east[0]]
+        print_west = Zerg.map_display[drone.map][west[1]][west[0]]
+        print_zerg = Zerg.map_display[drone.map][y_coord][x_coord]
 
-        Zerg.map_print_graphs[drone.map][north[1]][north[0]].grid(row=north[1], column=north[0], sticky='NW')
+        if drone.context.north == "#":
+            print_north.config(bg='gray50')
+        elif drone.context.north == "~":
+            print_north.config(bg='lawn green')
+        elif drone.context.north == "*":
+            print_north.config(bg='blue')
+        elif drone.context.north == "_":
+            print_north.config(bg='gold')
+        elif drone.context.north == " ":
+            print_north.config(bg='grey60')
 
         if drone.context.south == "#":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gray50')
+            print_south.config(bg='gray50')
         elif drone.context.south == "~":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='lawn green')
+            print_south.config(bg='lawn green')
         elif drone.context.south == "*":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='blue')
+            print_south.config(bg='blue')
         elif drone.context.south == "_":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='gold')
+            print_south.config(bg='gold')
         elif drone.context.south == " ":
-            Zerg.map_print_graphs[drone.map][south[1]][south[0]].config(bg='grey60')
-
-        Zerg.map_print_graphs[drone.map][south[1]][south[0]].grid(row=south[1], column=south[0], sticky='NW')
+            print_south.config(bg='grey60')
 
         if drone.context.east == "#":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gray50')
+            print_east.config(bg='gray50')
         elif drone.context.east == "~":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='lawn green')
+            print_east.config(bg='lawn green')
         elif drone.context.east == "*":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='blue')
+            print_east.config(bg='blue')
         elif drone.context.east == "_":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='gold')
+            print_east.config(bg='gold')
         elif drone.context.west == " ":
-            Zerg.map_print_graphs[drone.map][east[1]][east[0]].config(bg='grey60')
-
-        Zerg.map_print_graphs[drone.map][east[1]][east[0]].grid(row=east[1], column=east[0], sticky='NW')
+            print_east.config(bg='grey60')
 
         if drone.context.west == "#":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gray50')
+            print_west.config(bg='gray50')
         elif drone.context.west == "~":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='lawn green')
+            print_west.config(bg='lawn green')
         elif drone.context.west == "*":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='blue')
+            print_west.config(bg='blue')
         elif drone.context.west == "_":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='gold')
+            print_west.config(bg='gold')
         elif drone.context.west == " ":
-            Zerg.map_print_graphs[drone.map][west[1]][west[0]].config(bg='grey60')
+            print_west.config(bg='grey60')
 
-        Zerg.map_print_graphs[drone.map][west[1]][west[0]].grid(row=west[1], column=west[0], sticky='NW')
-        Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].config(bg='magenta2')
-        #Zerg.map_print_graphs[drone.map][drone.context.y][drone.context.x].grid(row=drone.context.y, column=drone.context.x)
+        print_north.grid(row=north[1], column=north[0], sticky='NW')
+        print_south.grid(row=south[1], column=south[0], sticky='NW')
+        print_east.grid(row=east[1], column=east[0], sticky='NW')
+        print_west.grid(row=west[1], column=west[0], sticky='NW')
+        print_zerg.config(bg='magenta2')
 
     def get_drone_info(self, drone):
         if drone.context:
@@ -324,19 +332,27 @@ class Overlord(Zerg):
             if drone.context.west == "~":
                 Zerg.map_graphs[drone.map].acid.append(west)
 
-            if drone.context.north != "#" and north not in Zerg.map_graphs[drone.map].visited:
+            if drone.context.north != "#" and \
+                    north not in Zerg.map_graphs[drone.map].visited:
                 Zerg.map_graphs[drone.map].unvisited.append(north)
-            if drone.context.south != "#" and south not in Zerg.map_graphs[drone.map].visited:
+            if drone.context.south != "#" and \
+                    south not in Zerg.map_graphs[drone.map].visited:
                 Zerg.map_graphs[drone.map].unvisited.append(south)
-            if drone.context.east != "#" and east not in Zerg.map_graphs[drone.map].visited:
+            if drone.context.east != "#" and \
+                    east not in Zerg.map_graphs[drone.map].visited:
                 Zerg.map_graphs[drone.map].unvisited.append(east)
-            if drone.context.west != "#" and west not in Zerg.map_graphs[drone.map].visited:
+            if drone.context.west != "#" and \
+                    west not in Zerg.map_graphs[drone.map].visited:
                 Zerg.map_graphs[drone.map].unvisited.append(west)
 
             self.update_display(drone, north, south, east, west)
-            Zerg.map_graphs[drone.map].unvisited = sorted(list(set(Zerg.map_graphs[drone.map].unvisited).difference(Zerg.map_graphs[drone.map].visited)))
+            Zerg.map_graphs[drone.map].unvisited = sorted(
+                    list(set(Zerg.map_graphs[drone.map].unvisited).difference(
+                        Zerg.map_graphs[drone.map].visited)))
             if drone.map in Zerg.map_minerals and Zerg.map_minerals[drone.map]:
-                path = a_star_search(Zerg.map_graphs[drone.map], tile, Zerg.map_minerals[drone.map])
+                path = a_star_search(
+                        Zerg.map_graphs[drone.map], tile,
+                        Zerg.map_minerals[drone.map])
                 if tile == path[0]:
                     path.pop(0)
             if drone.commands:
@@ -346,25 +362,31 @@ class Overlord(Zerg):
                         outdated.append(key)
                 for item in outdated:
                     drone.commands.pop(item)
-            if (not drone.commands and drone.carry > 7) or ('Return' not in drone.commands and self.total_ticks < 25):
-                path = a_star_search(Zerg.map_graphs[drone.map], tile, Zerg.starting_locations[drone.map])
+            if (not drone.commands and drone.carry > 7)
+            or ('Return' not in drone.commands and self.total_ticks < 25):
+                path = a_star_search(
+                        Zerg.map_graphs[drone.map], tile,
+                        Zerg.starting_locations[drone.map])
                 if tile == path[0]:
                     path.pop(0)
                 drone.commands.update({"Return": path})
             elif not drone.commands and path and drone.carry < 10:
-                if Zerg.map_minerals[drone.map] in Zerg.map_graphs[drone.map].visited:
+                if Zerg.map_minerals[drone.map] in \
+                        Zerg.map_graphs[drone.map].visited:
                     Zerg.map_minerals.pop(drone.map)
                 else:
                     drone.commands.update({"Mine": path})
             elif 'Discover' not in drone.commands:
                 if len(Zerg.map_graphs[drone.map].unvisited) > 0:
                     if self.last_discovery % 2 == 0:
-                        unexplored = Zerg.map_graphs[drone.map].unvisited.pop(0)
+                        new_tile = Zerg.map_graphs[drone.map].unvisited.pop(0)
                     else:
-                        unexplored = Zerg.map_graphs[drone.map].unvisited.pop()
+                        new_tile = Zerg.map_graphs[drone.map].unvisited.pop()
                     self.last_discovery += 1
 
-                    path = a_star_search(Zerg.map_graphs[drone.map], tile, unexplored)
+                    path = a_star_search(
+                            Zerg.map_graphs[drone.map], tile,
+                            new_tile)
                     if tile == path[0]:
                         path.pop(0)
                     drone.commands.update({"Discover": path})
@@ -372,6 +394,7 @@ class Overlord(Zerg):
                     drone.commands.update({"Discover": None})
             if drone.health <= 0:
                 self.delete.append(id(drone))
+
 
 class Drone(Zerg):
 
@@ -404,12 +427,9 @@ class Drone(Zerg):
             return directions[0]
 
     def action(self, context):
-        #if self.map in Zerg.map_minerals:
-            #print("Minerals I see: ", Zerg.map_minerals[self.map])
-        #print("Commands: ", self.commands)
-        #print("Carring:  ", self.carry)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
-        neighbors = {0: context.north, 1: context.south, 2: context.east, 3: context.west}
+        neighbors = {0: context.north, 1: context.south,
+                     2: context.east, 3: context.west}
         if self.map not in Zerg.starting_locations:
             Zerg.starting_locations[self.map] = (context.x, context.y)
             Zerg.map_graphs[self.map].visited.add((context.x, context.y))
@@ -442,7 +462,8 @@ class Drone(Zerg):
             if 'Mine' in self.commands:
                 goto = "Center"
                 if len(self.commands['Mine']) > 0:
-                    goto = self.get_direction(self.commands['Mine'].pop(0), (context.x, context.y))
+                    goto = self.get_direction(
+                        self.commands['Mine'].pop(0), (context.x, context.y))
                 if self.commands and len(self.commands['Mine']) == 0:
                     self.commands.pop('Mine')
                 else:
@@ -453,7 +474,8 @@ class Drone(Zerg):
                 goto = "Center"
                 if len(self.commands['Return']) > 0:
                     to_tile = self.commands['Return'].pop(0)
-                    if to_tile == (context.x, context.y) and len(self.commands['Return']) > 0:
+                    if to_tile == (context.x, context.y)
+                    and len(self.commands['Return']) > 0:
                         to_tile = self.commands['Return'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
                 if Zerg.starting_locations[self.map] == (context.x, context.y):
@@ -468,7 +490,8 @@ class Drone(Zerg):
                 goto = "Center"
                 if self.commands['Discover']:
                     to_tile = self.commands['Discover'].pop(0)
-                    if to_tile == (context.x, context.y) and len(self.commands['Discover']) > 0:
+                    if to_tile == (context.x, context.y)
+                    and len(self.commands['Discover']) > 0:
                         to_tile = self.commands['Discover'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
                     return goto
@@ -476,27 +499,27 @@ class Drone(Zerg):
                 self.commands.pop('Discover')
                 allowed = " ~"
                 if self.bias == 0:
-                    return Drone.north_bias(self.last_tile, context, directions, allowed)
+                    return Drone.north_bias(
+                            self.last_tile, context, directions, allowed)
                 elif self.bias == 1:
-                    return Drone.south_bias(self.last_tile, context, directions, allowed)
+                    return Drone.south_bias(
+                            self.last_tile, context, directions, allowed)
                 elif self.bias == 2:
-                    return Drone.east_bias(self.last_tile, context, directions, allowed)
+                    return Drone.east_bias(
+                            self.last_tile, context, directions, allowed)
                 elif self.bias == 3:
-                    return Drone.west_bias(self.last_tile, context, directions, allowed)
+                    return Drone.west_bias(
+                            self.last_tile, context, directions, allowed)
 
-        #zerg_directions = [context.north, context.south, context.east, context.west]
-        #random_choice = random.randint(0, 3)  # both arguments are inclusive
-        #if zerg_directions[random_choice] == "#" or zerg_directions[random_choice] == "~":
-            #return "CENTER"
         return "CENTER"
-
 
     def north_bias(last_tile, context, directions, allowed):
         if context.north in allowed and context.y + 1 != last_tile[1]:
             return directions.get(0)
         elif context.east in allowed and context.x + 1 != last_tile[0]:
             return directions.get(2)
-        elif context.south in allowed and context.y - 1 != last_tile[1]: return directions.get(1)
+        elif context.south in allowed and context.y - 1 != last_tile[1]:
+            return directions.get(1)
         elif context.west in allowed and context.x - 1 != last_tile[0]:
             return directions.get(3)
         else:
@@ -513,7 +536,6 @@ class Drone(Zerg):
             return directions.get(2)
         else:
             return "CENTER"
-
 
     def east_bias(last_tile, context, directions, allowed):
         if context.east in allowed and context.x + 1 != last_tile[0]:
@@ -541,7 +563,7 @@ class Drone(Zerg):
 
 
 class Dashboard(tkinter.Toplevel):
-     def __init__(self, parent):
+    def __init__(self, parent):
         super().__init__(parent)
         self.geometry("300x200+300+200")
         self.title("Overlord's Dashboard")
