@@ -11,12 +11,12 @@ class Zerg:
     deploying = dict()          # Dict of zergs being deployed by id
     map_graphs = dict()         # Dict of graph objects by map id
     map_display = dict()   # Dict of frames for map displays
-    map_minerals = dict()       # Dict of minerals per map by id
+    map_viable = {-1: False, 0: True, 1: True, 2: True}    # Dict of minerals per map by id
 
     def __init__(self, health):
         self.health = health
 
-    def action(self):
+    def action(self, context=None):
         pass
 
 '''
@@ -134,6 +134,7 @@ class Overlord(Zerg):
         self.random_map_id = 0          # Which map to deploy to
         self.map_dashboards = list()    # List of Tkinter windows for maps
         self.last_discovery = 0         # Variance for discovery
+        self.ticks_remaining = total_ticks
 
         screen_position = "300x200+{}+{}"   # Screen placement for map windows
         screen_x = 300
@@ -167,33 +168,48 @@ class Overlord(Zerg):
                 self.map_dashboards[map_id], height=12, width=12, bg='black')
             for x in range(width)] for y in range(height)]
 
-    def action(self):
+    def action(self, context=None):
+        super().action(context)
+        self.ticks_remaining -= 1
         tmp_drones = self.drones.copy()
         for zerg_id, zerg in tmp_drones.items():
             if zerg.health < 1:
                 del self.drones[zerg_id]
             elif zerg.deployed == True and zerg.context:
                 self.get_drone_info(zerg)
+        #print("Deploy: ", self.deployable)
+        #print("Returns: ", Zerg.returns)
+        #print("Landings: ", Zerg.landing_clear)
+        #print("Viable: ", Zerg.map_viable)
+        #print("Unvisted(0): ", Zerg.map_graphs[0].unvisited)
+        #print("Visted(0): ", Zerg.map_graphs[0].visited)
+        #print("Unvisted(1): ", Zerg.map_graphs[1].unvisited)
+        #print("Visted(1): ", Zerg.map_graphs[1].visited)
+        #print("Unvisted(2): ", Zerg.map_graphs[2].unvisited)
+        #print("Visted(2): ", Zerg.map_graphs[2].visited)
         result = "NONE"
         if Zerg.returns:
-            returning = Zerg.returns.pop()
-            result = "RETURN {}".format(returning)
-            Zerg.landing_clear[self.drones[returning].map] = True
-            self.deployable.append(returning)
-            self.drones[returning].deployed = False
-        for landing_zone in Zerg.landing_clear:
-            if Zerg.landing_clear[landing_zone] is True and self.deployable:
-                deploy = self.deployable.pop()
-                result = "DEPLOY {} {}".format(deploy, landing_zone)
-                Zerg.landing_clear[self.drones[deploy].map] = False
-                self.drones[deploy].map = landing_zone
-                self.drones[deploy].deployed = True
-                return result
-            elif Zerg.landing_clear[landing_zone] is False:
-                print("Landing for {} is not clear.".format(landing_zone))
-            self.random_map_id = (self.random_map_id + 1) % 3
-        print("Deploy: ", self.deployable)
-        print("Returns: ", Zerg.returns)
+            for drone in Zerg.returns:
+                drone_tile = (self.drones[drone].context.x, self.drones[drone].context.y)
+                if drone_tile == Zerg.starting_locations[self.drones[drone].map]:
+                    returning = drone
+                    Zerg.returns.remove(returning)
+                    result = "RETURN {}".format(returning)
+                    Zerg.landing_clear[self.drones[returning].map] = True
+                    self.deployable.append(returning)
+                    self.drones[returning].deployed = False
+        elif self.ticks_remaining > 15:
+            for landing_zone in Zerg.landing_clear:
+                if Zerg.map_viable[landing_zone] and Zerg.landing_clear[landing_zone] is True and self.deployable:
+                    deploy = self.deployable.pop()
+                    result = "DEPLOY {} {}".format(deploy, landing_zone)
+                    Zerg.landing_clear[self.drones[deploy].map] = False
+                    self.drones[deploy].map = landing_zone
+                    self.drones[deploy].deployed = True
+                    return result
+                elif Zerg.landing_clear[landing_zone] is False:
+                    print("Landing for {} is not clear.".format(landing_zone))
+        self.update_dashboard(self.dashboard, result)
 
 
         return result
@@ -301,6 +317,17 @@ class Overlord(Zerg):
         print_west = Zerg.map_display[drone.map][west[1]][west[0]]
         print_zerg = Zerg.map_display[drone.map][y_coord][x_coord]
 
+        '''
+        TILE_MAP = {
+            '#': 'gray50',
+            '~': 'lawn green'
+        }
+        print_north.config(bg=TILE_MAP[drone.context.north])
+        print_north.config(bg=TILE_MAP[drone.context.north])
+        print_north.config(bg=TILE_MAP[drone.context.north])
+        print_north.config(bg=TILE_MAP[drone.context.north])
+        '''
+
         if drone.context.north == "#":
             print_north.config(bg='gray50')
         elif drone.context.north == "~":
@@ -331,7 +358,7 @@ class Overlord(Zerg):
             print_east.config(bg='blue')
         elif drone.context.east == "_":
             print_east.config(bg='gold')
-        elif drone.context.west == " ":
+        elif drone.context.east == " ":
             print_east.config(bg='grey60')
 
         if drone.context.west == "#":
@@ -360,6 +387,10 @@ class Overlord(Zerg):
         west = (int(drone.context.x) - 1, drone.context.y)
         drone.last_tile = tile
 
+        self.update_display(drone, north, south, east, west)
+
+        Zerg.map_graphs[drone.map].visited.add(tile)
+
 
         if drone.context.north == "#":
             Zerg.map_graphs[drone.map].walls.append(north)
@@ -379,25 +410,42 @@ class Overlord(Zerg):
         if drone.context.west == "~":
             Zerg.map_graphs[drone.map].acid.append(west)
 
-        Zerg.map_graphs[drone.map].unvisited = sorted(
-                list(set(Zerg.map_graphs[drone.map].unvisited).difference(
-                    Zerg.map_graphs[drone.map].visited)))
 
-        if drone.carry > (.7 * drone.capacity):
+#        if tile == Zerg.starting_locations[drone.map] and 'Return' in drone.commands:
+#            print("OVerlord RETURNING")
+#            Zerg.returns.append(id(drone))
+#            drone.depoyed = False
+#            return
+
+
+        if drone.carry > (.7 * drone.capacity) or (self.ticks_remaining < 15 and drone.carry > 0):
             path = a_star_search(
                     Zerg.map_graphs[drone.map], tile,
                     Zerg.starting_locations[drone.map])
             path.pop(0)
             drone.commands.update({"Return": path})
-        elif Zerg.map_graphs[drone.map].unvisited:
+        elif 'Return' not in drone.commands and Zerg.map_graphs[drone.map].unvisited:
             unexplored = Zerg.map_graphs[drone.map].unvisited.pop()
             path = a_star_search(
                     Zerg.map_graphs[drone.map], tile,
                     unexplored)
             path.pop(0)
             drone.commands.update({"Discover": path})
+#        elif 'Return' not in drone.commands:
+#            path = a_star_search(
+#                    Zerg.map_graphs[drone.map], tile,
+#                    Zerg.starting_locations[drone.map])
+#            path.pop(0)
+#            drone.commands.update({"Return": path})
+
         else:
             drone.commands.update({"Discover": None})
+        if len(Zerg.map_graphs[drone.map].unvisited) == 0:
+            print("Out of nodes")
+            Zerg.map_viable[drone.map] = False
+        else:
+            Zerg.map_viable[drone.map] = True
+
 
         '''
         Zerg.map_graphs[drone.map].visited.add(tile)
@@ -541,6 +589,9 @@ class Drone(Zerg):
         west = (int(context.x) - 1, context.y)
 
         Zerg.map_graphs[self.map].visited.add(tile)
+        Zerg.map_graphs[self.map].unvisited = sorted(
+                list(set(Zerg.map_graphs[self.map].unvisited).difference(
+                    Zerg.map_graphs[self.map].visited)))
 
         if context.north != "#":
             Zerg.map_graphs[self.map].unvisited.append(north)
@@ -551,18 +602,17 @@ class Drone(Zerg):
         if context.west != "#":
             Zerg.map_graphs[self.map].unvisited.append(west)
 
-        #print("Unvisted: ", Zerg.map_graphs[self.map].unvisited)
-        #print("Visted: ", Zerg.map_graphs[self.map].visited)
-        #print("TEST: {} {}".format(id(self), (context.x, context.y)))
-        #print("Command: ", self.commands)
+        #print("TEST: {} {} {}".format(id(self), self.map, (context.x, context.y)))
+        print("Carry: {}".format(self.carry))
+        print("Command: ", self.commands)
         print("Landings: ", Zerg.starting_locations)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         neighbors = {0: context.north, 1: context.south,
                      2: context.east, 3: context.west}
         if self.deployed is True and self.map not in Zerg.starting_locations:
             print("Updating starting loc")
-            Zerg.starting_locations.update({self.map: (context.x, context.y)})
-            Zerg.map_graphs[self.map].visited.add((context.x, context.y))
+            Zerg.starting_locations.update({self.map: tile})
+            Zerg.map_graphs[self.map].visited.add(tile)
         if (context.x, context.y) == Zerg.starting_locations[self.map]:
             Zerg.landing_clear[self.map] = False
         else:
@@ -572,6 +622,7 @@ class Drone(Zerg):
         if self.steps % 25 == 0:
             self.bias = random.randint(0, 3)
         self.context = context
+        goto = "Center"
         if 'Return' not in self.commands:
             if context.north == "*" and self.carry < 10:
                 self.commands = dict()
@@ -591,7 +642,6 @@ class Drone(Zerg):
                 return directions.get(3)
         if self.commands:
             if 'Mine' in self.commands:
-                goto = "Center"
                 if len(self.commands['Mine']) > 0:
                     goto = self.get_direction(
                         self.commands['Mine'].pop(0), (context.x, context.y))
@@ -600,35 +650,37 @@ class Drone(Zerg):
                 else:
                     self.carry += 1
 
-                return goto
             elif 'Return' in self.commands:
-                print("RETURNING")
-                goto = "Center"
                 if len(self.commands['Return']) > 0:
                     to_tile = self.commands['Return'].pop(0)
                     if to_tile == (context.x, context.y)\
                             and len(self.commands['Return']) > 0:
                         to_tile = self.commands['Return'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
-                if Zerg.starting_locations[self.map] == (context.x, context.y):
+
+                elif tile == Zerg.starting_locations[self.map]:
+                    Zerg.returns.append(id(self))
+                    self.commands.pop('Return')
+                    self.carry = 0
+
+                '''
+                if Zerg.starting_locations[self.map] == (self.context.x, self.context.y):
                     self.carry = 0
                     self.path_step = 0
                     self.deployed = False
                     Zerg.returns.append(id(self))
                     Zerg.landing_clear[self.map] = False
                     self.commands.pop('Return')
+                '''
 
-                return goto
 
             elif 'Discover' in self.commands:
-                goto = "Center"
                 if self.commands['Discover']:
                     to_tile = self.commands['Discover'].pop(0)
                     if to_tile == (context.x, context.y)\
                             and len(self.commands['Discover']) > 0:
                         to_tile = self.commands['Discover'].pop(0)
                     goto = self.get_direction(to_tile, (context.x, context.y))
-                    return goto
 
                 self.commands.pop('Discover')
                 allowed = " ~"
@@ -645,7 +697,8 @@ class Drone(Zerg):
                     return Drone.west_bias(
                             self.last_tile, context, directions, allowed)
 
-        return "CENTER"
+
+        return goto
 
     def north_bias(last_tile, context, directions, allowed):
         if context.north in allowed and context.y + 1 != last_tile[1]:
