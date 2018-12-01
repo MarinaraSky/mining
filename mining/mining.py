@@ -1,3 +1,6 @@
+'''Class API for Zergs for Mining purposes. Overlord will serve
+as command and control for the most part and will dictate all drones
+movements as well as keep track of them on the maps.'''
 import random
 import tkinter
 import heapq
@@ -5,6 +8,9 @@ import collections
 
 
 class Zerg:
+    '''Parent Class for all Zerg
+    Has a few class variables to serve as a "hivemind" for all
+    zerg to communicate with each other'''
     returns = list()            # List of zergs for return
     starting_locations = dict()     # Dict of starting locations by map id
     landing_clear = {
@@ -19,9 +25,11 @@ class Zerg:
             }    # Dict of depleted maps
 
     def __init__(self, health):
+        '''Takes a number for heatlh and will create a Zerg'''
         self.health = health
 
     def action(self, context=None):
+        '''Takes a context object and will do nothing'''
         pass
 
 '''
@@ -35,7 +43,9 @@ class Zerg:
 
 
 class Graph():
+
     def __init__(self):
+        '''Creates a Graph object to be used for pathing'''
         self.width = 200    # Twice as big as needed to accomodate odd coords
         self.height = 200
         self.weights = {}   # Dict of weights for nodes, Acid = 4, ground = 1
@@ -45,19 +55,23 @@ class Graph():
         self.unvisited = list()  # List of visitable tiles yet to be explored
 
     def cost(self, from_node, to_node):
+        '''Determines the cost from one node to the next'''
         weight = 1
         if to_node in self.acid:
             weight = 4
         return self.weights.get(to_node, weight)
 
     def in_bounds(self, id):
+        '''Will verify coords are within bounds'''
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
 
     def passable(self, id):
+        '''Determines if tile can be crossed'''
         return id not in self.walls
 
     def neighbors(self, id):
+        '''Figures out tiles neighbors'''
         (x, y) = id
         results = [(x+1, y), (x, y-1), (x-1, y), (x, y+1)]
         if (x+y) % 2 == 0:
@@ -66,14 +80,9 @@ class Graph():
         results = filter(self.passable, results)
         return results
 
-    def __str__(self):
-        output = ""
-        for edge in self.edges:
-            output += str(edge)
-        return output
-
 
 class PriorityQueue:
+    '''Taken from redblob games as sited above, UNMODIFIED'''
     def __init__(self):
         self.elements = []
 
@@ -88,6 +97,7 @@ class PriorityQueue:
 
 
 def heuristic(a, b):
+    '''Taken from redblob games as sited above, UNMODIFIED'''
     (x1, y1) = a
     (x2, y2) = b
     return abs(x1 - x2) + abs(y1 + y2)
@@ -129,7 +139,12 @@ def a_star_search(graph, start, goal):
 
 
 class Overlord(Zerg):
+    '''Command Center for all drones. Overlord will dictate what paths
+    and locations for drone deployment.'''
+
     def __init__(self, total_ticks, refined_minerals, dashboard=None):
+        '''Creates the Overlord and will initilize all Drones based
+        on ammount of refined_minerals.'''
         super().__init__(100)
         self.dashboard = dashboard      # Display object
         self.total_ticks = total_ticks  # Keeps track of ticks remaining
@@ -153,17 +168,17 @@ class Overlord(Zerg):
 
             dash_title = "MAP {}".format(x)
             self.map_dashboards[x].title(dash_title)
-            self.map_dashboards[x].log.forget()
+            self.map_dashboards[x].log.forget()  # Removes text box from parent
             del self.map_dashboards[x].log
-        drone_count = int(refined_minerals / 9)
         while refined_minerals > Scout.get_init_cost():
-            if len(self.drones) != 3:
+            if len(self.drones) != 3:   # Only 3 scouts will be created
                 z = Scout()
                 self.drones[id(z)] = z
                 refined_minerals -= Scout.get_init_cost()
             else:
                 break
         while refined_minerals > Miner.get_init_cost():
+        # Remaining resources will be spent on miners
             z = Miner()
             self.miners[id(z)] = z
             refined_minerals -= Miner.get_init_cost()
@@ -172,29 +187,35 @@ class Overlord(Zerg):
         self.drones.update(self.miners)
 
     def add_map(self, map_id, summary):
+        '''Creates the map object that will be deployed to. Logic is in
+        place to not deploy to empty maps.'''
         self.maps[map_id] = summary
         Zerg.map_graphs[map_id] = Graph()
         width, height = 100, 100
+        # Nested list comprehension to create 2d list of Frames
         Zerg.map_display[map_id] = [[
             tkinter.Frame(
                 self.map_dashboards[map_id], height=12, width=12, bg='black')
             for x in range(width)] for y in range(height)]
+        # Check to not deploy to empty maps
         if summary == 0:
             Zerg.landing_clear[map_id] = False
 
     def action(self, context=None):
+        '''Will tell drones what to do and will decide to deploy or return
+        drones.'''
         super().action(context)
         self.ticks_remaining -= 1
-        tmp_drones = self.drones.copy()
+        tmp_drones = self.drones.copy()  # Creates a copy to delete from orig
         for zerg_id, zerg in tmp_drones.items():
-            if zerg.health < 1:
+            if zerg.health < 1:  # Kills off Drones
                 del self.drones[zerg_id]
             elif zerg.deployed is True and zerg.context:
-                self.get_drone_info(zerg)
+                self.get_drone_info(zerg)  # Tells drones what to do
             elif zerg.deployed is False and isinstance(zerg, Miner):
-                self.mining_units.add(id(zerg))
+                self.mining_units.add(id(zerg))  # Readies Miners for redeploy
         result = "NONE"
-        if Zerg.returns:
+        if Zerg.returns:  # Checks for drones to return
             for drone in Zerg.returns:
                 drone_landing = Zerg.starting_locations[self.drones[drone].map]
                 drone_tile = (
@@ -210,7 +231,7 @@ class Overlord(Zerg):
                     elif isinstance(self.drones[returning], Scout):
                         self.deployable.append(returning)
                     self.drones[returning].deployed = False
-        elif self.ticks_remaining > 15:
+        elif self.ticks_remaining > 15:  # Will not deploy when time is short
             for landing_zone in Zerg.landing_clear:
                 if Zerg.map_viable[landing_zone] and \
                         Zerg.landing_clear[landing_zone] is True and \
@@ -239,32 +260,8 @@ class Overlord(Zerg):
 
         return result
 
-    def update_dashboard(self, dashboard, result):
-        for dash in range(3):
-            self.map_dashboards[dash].log.config(state=tkinter.NORMAL)
-            self.map_dashboards[dash].log.delete('1.0', tkinter.END)
-            self.map_dashboards[dash].log.config(state=tkinter.DISABLED)
-        for drone_id, drone in self.drones.items():
-            if drone.deployed is True:
-                drone_string = "{}({}): {}".format(
-                        drone_id, drone.map, drone.commands)
-                self.map_dashboards[drone.map].log.config(state=tkinter.NORMAL)
-                self.map_dashboards[drone.map].log.insert(
-                        tkinter.END, drone_string)
-                self.map_dashboards[drone.map].log.insert(tkinter.END, "\n")
-                self.map_dashboards[drone.map].log.see(tkinter.END)
-                self.map_dashboards[drone.map].log.config(
-                        state=tkinter.DISABLED)
-                self.map_dashboards[drone.map].log.grid()
-
-        self.dashboard.log.config(state=tkinter.NORMAL)
-        self.dashboard.log.delete('1.0', tkinter.END)
-        self.dashboard.log.insert(tkinter.END, result)
-        self.dashboard.log.insert(tkinter.END, "\n")
-        self.dashboard.log.see(tkinter.END)
-        self.dashboard.log.config(state=tkinter.DISABLED)
-
     def update_display(self, drone, north, south, east, west):
+        '''Takes a drone object and will plot it and its neighbors to display '''
         x_coord = drone.context.x
         y_coord = drone.context.y
         print_north = Zerg.map_display[drone.map][north[1]][north[0]]
@@ -293,6 +290,7 @@ class Overlord(Zerg):
         print_zerg.config(bg='magenta2')
 
     def get_drone_info(self, drone):
+        '''Takes a drone object and will decide what it should do'''
         path = None
         tile = (drone.context.x, drone.context.y)
         north = (drone.context.x, int(drone.context.y) + 1)
@@ -337,24 +335,39 @@ class Overlord(Zerg):
 
 
 class Drone(Zerg):
+    '''Base Drone Class for custom drones to be made from'''
 
     def __init__(self):
+        '''Creates basic drone'''
         super().__init__(40)
         self.capacity = 10
         self.moves = 1
 
     def get_init_cost():
+        '''Returns cost for this drone'''
         return 9
 
-    def action(self, context):
-        pass
+    def get_direction(self, starting, ending):
+        '''Takes a node and determines its cardinal direction to the
+        desitnation'''
+        directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
+        if starting[0] < ending[0]:
+            return directions[3]
+        elif starting[0] > ending[0]:
+            return directions[2]
+        elif starting[1] < ending[1]:
+            return directions[1]
+        elif starting[1] > ending[1]:
+            return directions[0]
 
 
 class Scout(Drone):
+    '''Scout drone used to explore maps'''
 
-    last_bias = 0
+    last_bias = 0  # Trend to follow if no overlord action
 
     def __init__(self):
+        '''Creates Scout'''
         super().__init__()
         self.moves = 1
         self.last_tile = None
@@ -370,20 +383,11 @@ class Scout(Drone):
         self.commands = dict()
 
     def get_init_cost():
+        '''Returns cost for this drone'''
         return 9
 
-    def get_direction(self, starting, ending):
-        directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
-        if starting[0] < ending[0]:
-            return directions[3]
-        elif starting[0] > ending[0]:
-            return directions[2]
-        elif starting[1] < ending[1]:
-            return directions[1]
-        elif starting[1] > ending[1]:
-            return directions[0]
-
     def action(self, context):
+        '''Controls what Scout will do based on Overlord'''
         tile = (context.x, context.y)
         north = (context.x, int(context.y) + 1)
         south = (context.x, int(context.y) - 1)
@@ -391,6 +395,7 @@ class Scout(Drone):
         west = (int(context.x) - 1, context.y)
 
         Zerg.map_graphs[self.map].visited.add(tile)
+        '''Keeps unexplored tiles sorted for prioritize closer tiles '''
         Zerg.map_graphs[self.map].unvisited = sorted(
                 list(set(Zerg.map_graphs[self.map].unvisited).difference(
                     Zerg.map_graphs[self.map].visited)))
@@ -434,7 +439,7 @@ class Scout(Drone):
             Zerg.landing_clear[self.map] = True
 
         self.steps += 1
-        if self.steps % 25 == 0:
+        if self.steps % 25 == 0:  # Changes trends to keep exploring
             self.bias = random.randint(0, 3)
         self.context = context
         goto = "Center"
@@ -464,6 +469,7 @@ class Scout(Drone):
 
         return goto
 
+    '''List of functions for the bias for Scouts'''
     def north_bias(last_tile, context, directions, allowed):
         if context.north in allowed and context.y + 1 != last_tile[1]:
             return directions.get(0)
@@ -514,14 +520,14 @@ class Scout(Drone):
 
 
 class Miner(Drone):
-
-    last_bias = 0
+    '''Used to be deployed and mine a block of minerals'''
 
     def __init__(self):
+        '''Initializes a Miner drone'''
         super().__init__()
         self.moves = 1
         self.last_tile = None
-        self.capacity = 5
+        self.capacity = 15
         self.health = 190
         self.carry = 0
         self.steps = 0
@@ -531,20 +537,11 @@ class Miner(Drone):
         self.commands = dict()
 
     def get_init_cost():
+        '''Returns the cost for a Miner drone'''
         return 24
 
-    def get_direction(self, starting, ending):
-        directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
-        if starting[0] < ending[0]:
-            return directions[3]
-        elif starting[0] > ending[0]:
-            return directions[2]
-        elif starting[1] < ending[1]:
-            return directions[1]
-        elif starting[1] > ending[1]:
-            return directions[0]
-
     def action(self, context):
+        '''Will act upon the commands from the overlord'''
         tile = (context.x, context.y)
         north = (context.x, int(context.y) + 1)
         south = (context.x, int(context.y) - 1)
@@ -622,7 +619,10 @@ class Miner(Drone):
 
 
 class Dashboard(tkinter.Toplevel):
+    '''Creates top level window for displays'''
+
     def __init__(self, parent):
+        '''Initialized a new Top level window for displays'''
         super().__init__(parent)
         self.geometry("300x200+300+200")
         self.title("Overlord's Dashboard")
