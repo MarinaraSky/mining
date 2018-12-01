@@ -178,7 +178,7 @@ class Overlord(Zerg):
             else:
                 break
         while refined_minerals > Miner.get_init_cost():
-        # Remaining resources will be spent on miners
+            # Remaining resources will be spent on miners
             z = Miner()
             self.miners[id(z)] = z
             refined_minerals -= Miner.get_init_cost()
@@ -261,7 +261,7 @@ class Overlord(Zerg):
         return result
 
     def update_display(self, drone, north, south, east, west):
-        '''Takes a drone object and will plot it and its neighbors to display '''
+        '''Takes a drone object and will plot it and neighbors to display'''
         x_coord = drone.context.x
         y_coord = drone.context.y
         print_north = Zerg.map_display[drone.map][north[1]][north[0]]
@@ -566,6 +566,7 @@ class Miner(Drone):
         neighbors = {'NORTH': context.north, 'SOUTH': context.south,
                      'EAST': context.east, 'WEST': context.west,
                      'Center': ""}
+        edges = {'NORTH': north, 'SOUTH': south, 'EAST': east, 'WEST': west}
         if (context.x, context.y) == Zerg.starting_locations[self.map]:
             Zerg.landing_clear[self.map] = False
         else:
@@ -611,6 +612,7 @@ class Miner(Drone):
         if goto and neighbors[goto] == "#":
             if 'Mine' in self.commands:
                 Zerg.minerals[self.map].add(self.commands['Mine'][-1])
+                Zerg.map_graphs[self.map].walls.append(edges[goto])
             self.commands = dict()
         if goto and neighbors[goto] == "_":
             Zerg.returns.append(id(self))
