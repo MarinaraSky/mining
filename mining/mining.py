@@ -153,22 +153,18 @@ class Overlord(Zerg):
             self.map_dashboards[x].title(dash_title)
             self.map_dashboards[x].log.forget()
             del self.map_dashboards[x].log
-            self.map_dashboards[x].log = tkinter.Text(
-                    self.map_dashboards[x], height=10,  width=30)
-            self.map_dashboards[x].log.grid(row=110, column=0, columnspan=100)
-        # TODO make logic to create zerg horde
         drone_count = int(refined_minerals / 9)
-        while refined_minerals > 9:
+        while refined_minerals > Scout.get_init_cost():
             if len(self.drones) != 3:
                 z = Scout()
                 self.drones[id(z)] = z
-                refined_minerals -= 9
+                refined_minerals -= Scout.get_init_cost()
             else:
                 break
-        while refined_minerals > 24:
+        while refined_minerals > Miner.get_init_cost():
             z = Miner()
             self.miners[id(z)] = z
-            refined_minerals -= 24
+            refined_minerals -= Miner.get_init_cost()
         self.deployable = list(self.drones)
         self.mining_units = set(self.miners)
         self.drones.update(self.miners)
@@ -195,17 +191,6 @@ class Overlord(Zerg):
                 self.get_drone_info(zerg)
             elif zerg.deployed == False and isinstance(zerg, Miner):
                 self.mining_units.add(id(zerg))
-        #print("Deploy: ", self.deployable)
-        #print("Mining Units: ", self.mining_units)
-        #print("Returns: ", Zerg.returns)
-        #print("Landings: ", Zerg.landing_clear)
-        #print("Viable: ", Zerg.map_viable)
-        #print("Unvisted(0): ", Zerg.map_graphs[0].unvisited)
-        #print("Visted(0): ", Zerg.map_graphs[0].visited)
-        #print("Unvisted(1): ", Zerg.map_graphs[1].unvisited)
-        #print("Visted(1): ", Zerg.map_graphs[1].visited)
-        #print("Unvisted(2): ", Zerg.map_graphs[2].unvisited)
-        #print("Visted(2): ", Zerg.map_graphs[2].visited)
         result = "NONE"
         if Zerg.returns:
             for drone in Zerg.returns:
@@ -229,8 +214,6 @@ class Overlord(Zerg):
                     self.drones[deploy].map = landing_zone
                     self.drones[deploy].deployed = True
                     return result
-                #elif Zerg.landing_clear[landing_zone] is False:
-                    #print("Landing for {} is not clear.".format(landing_zone))
                 elif Zerg.landing_clear[landing_zone] is True and Zerg.minerals[landing_zone] and self.mining_units:
                     gatherer = self.mining_units.pop()
                     result = "DEPLOY {} {}".format(gatherer, landing_zone)
@@ -244,9 +227,6 @@ class Overlord(Zerg):
                     Zerg.landing_clear[self.drones[gatherer].map] = False
                     self.drones[gatherer].deployed = True
                     return result
-
-        #self.update_dashboard(self.dashboard, result)
-
 
         return result
 
@@ -378,14 +358,6 @@ class Overlord(Zerg):
         if drone.context.west == "~":
             Zerg.map_graphs[drone.map].acid.append(west)
 
-
-#        if tile == Zerg.starting_locations[drone.map] and 'Return' in drone.commands:
-#            print("OVerlord RETURNING")
-#            Zerg.returns.append(id(drone))
-#            drone.depoyed = False
-#            return
-
-
         if isinstance(drone, Miner) and 'Mine' not in drone.commands:
             path = a_star_search(
                     Zerg.map_graphs[drone.map], tile,
@@ -399,13 +371,6 @@ class Overlord(Zerg):
                     unexplored)
             path.pop(0)
             drone.commands.update({"Discover": path})
-#        elif 'Return' not in drone.commands:
-#            path = a_star_search(
-#                    Zerg.map_graphs[drone.map], tile,
-#                    Zerg.starting_locations[drone.map])
-#            path.pop(0)
-#            drone.commands.update({"Return": path})
-
         elif isinstance(drone, Scout):
             drone.commands.update({"Discover": None})
         if len(Zerg.map_graphs[drone.map].unvisited) == 0:
@@ -417,11 +382,14 @@ class Overlord(Zerg):
 
 class Drone(Zerg):
 
-    last_bias = 0
 
     def __init__(self):
         super().__init__(40)
+        self.capacity = 10
+        self.moves = 1
 
+    def get_init_cost():
+        return 9
 
     def action(self, context):
         pass
@@ -444,6 +412,9 @@ class Scout(Drone):
         self.deployed = False
         Scout.last_bias += 1
         self.commands = dict()
+
+    def get_init_cost():
+        return 9
 
     def get_direction(self, starting, ending):
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
@@ -495,16 +466,10 @@ class Scout(Drone):
         if context.west == "*":
             Zerg.minerals[self.map].add(west)
 
-        #print("TEST: {} {} {}".format(id(self), self.map, (context.x, context.y)))
-        #print("Minerals: ", Zerg.minerals)
-        #print("Carry: {}".format(self.carry))
-        #print("Command: ", self.commands)
-        #print("Landings: ", Zerg.starting_locations)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         neighbors = {0: context.north, 1: context.south,
                      2: context.east, 3: context.west}
         if self.deployed is True and self.map not in Zerg.starting_locations:
-            #print("Updating starting loc")
             Zerg.starting_locations.update({self.map: tile})
             Zerg.map_graphs[self.map].visited.add(tile)
         if (context.x, context.y) == Zerg.starting_locations[self.map]:
@@ -610,6 +575,8 @@ class Miner(Drone):
         self.deployed = False
         self.commands = dict()
 
+    def get_init_cost():
+        return 24
     def get_direction(self, starting, ending):
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         if starting[0] < ending[0]:
@@ -642,10 +609,6 @@ class Miner(Drone):
         if context.west != "#":
             Zerg.map_graphs[self.map].unvisited.append(west)
 
-        #print("TEST: {} {} {}".format(id(self), self.map, (context.x, context.y)))
-        #print("Carry: {}".format(self.carry))
-        #print("Commad: ", self.commands)
-        #print("Landings: ", Zerg.starting_locations)
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         neighbors = {'NORTH': context.north, 'SOUTH': context.south,
                      'EAST': context.east, 'WEST': context.west,
@@ -691,7 +654,7 @@ class Miner(Drone):
                     Zerg.returns.append(id(self))
                     self.commands.pop('Return')
                     self.carry = 0
-     
+
         if goto and neighbors[goto] == "#":
             if 'Mine' in self.commands:
                 Zerg.minerals[self.map].add(self.commands['Mine'][-1])
