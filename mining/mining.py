@@ -181,6 +181,8 @@ class Overlord(Zerg):
             tkinter.Frame(
                 self.map_dashboards[map_id], height=12, width=12, bg='black')
             for x in range(width)] for y in range(height)]
+        if summary == 0:
+            Zerg.landing_clear[map_id] = False
 
     def action(self, context=None):
         super().action(context)
@@ -599,7 +601,7 @@ class Miner(Drone):
         super().__init__()
         self.moves = 1
         self.last_tile = None
-        self.capacity = 15
+        self.capacity = 5
         self.health = 190
         self.carry = 0
         self.steps = 0
