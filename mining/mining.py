@@ -4,17 +4,19 @@ import heapq
 import collections
 
 
-
-
 class Zerg:
     returns = list()            # List of zergs for return
     starting_locations = dict()     # Dict of starting locations by map id
-    landing_clear = {0: True, 1: True, 2: True}      # Dict of bools signaling clear landing pads
+    landing_clear = {
+            0: True, 1: True, 2: True
+        }  # Dict of bools signaling clear landing pads
     deploying = dict()          # Dict of zergs being deployed by id
     map_graphs = dict()         # Dict of graph objects by map id
     map_display = dict()   # Dict of frames for map displays
     minerals = {0: set(), 1: set(), 2: set()}
-    map_viable = {-1: False, 0: True, 1: True, 2: True}    # Dict of minerals per map by id
+    map_viable = {
+            -1: False, 0: True, 1: True, 2: True
+            }    # Dict of minerals per map by id
 
     def __init__(self, health):
         self.health = health
@@ -187,15 +189,18 @@ class Overlord(Zerg):
         for zerg_id, zerg in tmp_drones.items():
             if zerg.health < 1:
                 del self.drones[zerg_id]
-            elif zerg.deployed == True and zerg.context:
+            elif zerg.deployed is True and zerg.context:
                 self.get_drone_info(zerg)
-            elif zerg.deployed == False and isinstance(zerg, Miner):
+            elif zerg.deployed is False and isinstance(zerg, Miner):
                 self.mining_units.add(id(zerg))
         result = "NONE"
         if Zerg.returns:
             for drone in Zerg.returns:
-                drone_tile = (self.drones[drone].context.x, self.drones[drone].context.y)
-                if drone_tile == Zerg.starting_locations[self.drones[drone].map]:
+                drone_landing = Zerg.starting_locations[self.drones[drone].map]
+                drone_tile = (
+                        self.drones[drone].context.x,
+                        self.drones[drone].context.y)
+                if drone_tile == drone_landing:
                     returning = drone
                     Zerg.returns.remove(returning)
                     result = "RETURN {}".format(returning)
@@ -207,20 +212,24 @@ class Overlord(Zerg):
                     self.drones[returning].deployed = False
         elif self.ticks_remaining > 15:
             for landing_zone in Zerg.landing_clear:
-                if Zerg.map_viable[landing_zone] and Zerg.landing_clear[landing_zone] is True and self.deployable:
+                if Zerg.map_viable[landing_zone] and \
+                        Zerg.landing_clear[landing_zone] is True and \
+                        self.deployable:
                     deploy = self.deployable.pop()
                     result = "DEPLOY {} {}".format(deploy, landing_zone)
                     Zerg.landing_clear[self.drones[deploy].map] = False
                     self.drones[deploy].map = landing_zone
                     self.drones[deploy].deployed = True
                     return result
-                elif Zerg.landing_clear[landing_zone] is True and Zerg.minerals[landing_zone] and self.mining_units:
+                elif Zerg.landing_clear[landing_zone] is True and \
+                        Zerg.minerals[landing_zone] and self.mining_units:
                     gatherer = self.mining_units.pop()
                     result = "DEPLOY {} {}".format(gatherer, landing_zone)
                     self.drones[gatherer].map = landing_zone
                     mineral = Zerg.minerals[landing_zone].pop()
                     path = a_star_search(
-                            Zerg.map_graphs[landing_zone], Zerg.starting_locations[landing_zone],
+                            Zerg.map_graphs[landing_zone],
+                            Zerg.starting_locations[landing_zone],
                             mineral)
                     path.pop(0)
                     self.drones[gatherer].commands.update({'Mine': path})
@@ -229,7 +238,6 @@ class Overlord(Zerg):
                     return result
 
         return result
-
 
     def update_dashboard(self, dashboard, result):
         for dash in range(3):
@@ -339,7 +347,6 @@ class Overlord(Zerg):
 
         Zerg.map_graphs[drone.map].visited.add(tile)
 
-
         if drone.context.north == "#":
             Zerg.map_graphs[drone.map].walls.append(north)
         if drone.context.south == "#":
@@ -382,7 +389,6 @@ class Overlord(Zerg):
 
 class Drone(Zerg):
 
-
     def __init__(self):
         super().__init__(40)
         self.capacity = 10
@@ -393,6 +399,7 @@ class Drone(Zerg):
 
     def action(self, context):
         pass
+
 
 class Scout(Drone):
 
@@ -557,7 +564,6 @@ class Scout(Drone):
             return "CENTER"
 
 
-
 class Miner(Drone):
 
     last_bias = 0
@@ -577,6 +583,7 @@ class Miner(Drone):
 
     def get_init_cost():
         return 24
+
     def get_direction(self, starting, ending):
         directions = {0: 'NORTH', 1: 'SOUTH', 2: 'EAST', 3: 'WEST'}
         if starting[0] < ending[0]:
