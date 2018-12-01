@@ -168,7 +168,8 @@ class Overlord(Zerg):
 
             dash_title = "MAP {}".format(x)
             self.map_dashboards[x].title(dash_title)
-            self.map_dashboards[x].legend_display.destroy()  # Removes legend from parent
+            # Removes legend from parent
+            self.map_dashboards[x].legend_display.destroy()
         while refined_minerals > Scout.get_init_cost():
             if len(self.drones) != 3:   # Only 3 scouts will be created
                 z = Scout()
@@ -628,7 +629,7 @@ class Dashboard(tkinter.Toplevel):
         self.geometry("300x200+300+200")
         self.title("Overlord's Dashboard")
         legend = {'Drones': 'magenta2', 'Minerals': 'blue', 'Walls': 'gray50',
-                'Ground': 'grey60', 'Acid': 'lawn green', 'Landing': 'gold'}
+                  'Ground': 'grey60', 'Acid': 'lawn green', 'Landing': 'gold'}
         self.legend_display = tkinter.Frame(self, width=100, height=50)
         self.legend_display.place(x=0, y=0)
         for item, color in legend.items():
