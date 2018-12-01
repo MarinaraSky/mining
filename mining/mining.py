@@ -16,7 +16,7 @@ class Zerg:
     minerals = {0: set(), 1: set(), 2: set()}
     map_viable = {
             -1: False, 0: True, 1: True, 2: True
-            }    # Dict of minerals per map by id
+            }    # Dict of depleted maps
 
     def __init__(self, health):
         self.health = health
@@ -134,13 +134,13 @@ class Overlord(Zerg):
         self.dashboard = dashboard      # Display object
         self.total_ticks = total_ticks  # Keeps track of ticks remaining
         self.maps = {}                  # Dict of maps by id
-        self.drones = {}                # Dict of drones by id
-        self.miners = {}
+        self.drones = {}                # Dict of all drones by id
+        self.miners = {}                # Dict of miners by id
         self.deploy = list()            # List of drones to deploy
         self.random_map_id = 0          # Which map to deploy to
         self.map_dashboards = list()    # List of Tkinter windows for maps
         self.last_discovery = 0         # Variance for discovery
-        self.ticks_remaining = total_ticks
+        self.ticks_remaining = total_ticks  # Remaining ticks
 
         screen_position = "300x200+{}+{}"   # Screen placement for map windows
         screen_x = 300
@@ -273,60 +273,18 @@ class Overlord(Zerg):
         print_west = Zerg.map_display[drone.map][west[1]][west[0]]
         print_zerg = Zerg.map_display[drone.map][y_coord][x_coord]
 
-        '''
         TILE_MAP = {
             '#': 'gray50',
-            '~': 'lawn green'
+            '~': 'lawn green',
+            ' ': 'grey60',
+            '_': 'gold',
+            '*': 'blue',
+            'Z': 'magenta2'
         }
         print_north.config(bg=TILE_MAP[drone.context.north])
-        print_north.config(bg=TILE_MAP[drone.context.north])
-        print_north.config(bg=TILE_MAP[drone.context.north])
-        print_north.config(bg=TILE_MAP[drone.context.north])
-        '''
-
-        if drone.context.north == "#":
-            print_north.config(bg='gray50')
-        elif drone.context.north == "~":
-            print_north.config(bg='lawn green')
-        elif drone.context.north == "*":
-            print_north.config(bg='blue')
-        elif drone.context.north == "_":
-            print_north.config(bg='gold')
-        elif drone.context.north == " ":
-            print_north.config(bg='grey60')
-
-        if drone.context.south == "#":
-            print_south.config(bg='gray50')
-        elif drone.context.south == "~":
-            print_south.config(bg='lawn green')
-        elif drone.context.south == "*":
-            print_south.config(bg='blue')
-        elif drone.context.south == "_":
-            print_south.config(bg='gold')
-        elif drone.context.south == " ":
-            print_south.config(bg='grey60')
-
-        if drone.context.east == "#":
-            print_east.config(bg='gray50')
-        elif drone.context.east == "~":
-            print_east.config(bg='lawn green')
-        elif drone.context.east == "*":
-            print_east.config(bg='blue')
-        elif drone.context.east == "_":
-            print_east.config(bg='gold')
-        elif drone.context.east == " ":
-            print_east.config(bg='grey60')
-
-        if drone.context.west == "#":
-            print_west.config(bg='gray50')
-        elif drone.context.west == "~":
-            print_west.config(bg='lawn green')
-        elif drone.context.west == "*":
-            print_west.config(bg='blue')
-        elif drone.context.west == "_":
-            print_west.config(bg='gold')
-        elif drone.context.west == " ":
-            print_west.config(bg='grey60')
+        print_south.config(bg=TILE_MAP[drone.context.south])
+        print_east.config(bg=TILE_MAP[drone.context.east])
+        print_west.config(bg=TILE_MAP[drone.context.west])
 
         print_north.grid(row=north[1], column=north[0], sticky='NW')
         print_south.grid(row=south[1], column=south[0], sticky='NW')
@@ -347,23 +305,14 @@ class Overlord(Zerg):
 
         Zerg.map_graphs[drone.map].visited.add(tile)
 
-        if drone.context.north == "#":
-            Zerg.map_graphs[drone.map].walls.append(north)
-        if drone.context.south == "#":
-            Zerg.map_graphs[drone.map].walls.append(south)
-        if drone.context.east == "#":
-            Zerg.map_graphs[drone.map].walls.append(east)
-        if drone.context.west == "#":
-            Zerg.map_graphs[drone.map].walls.append(west)
+        TILE_MAP = {
+            '#': Zerg.map_graphs[drone.map].walls.append,
+            '~': Zerg.map_graphs[drone.map].acid.append,
+            }
 
-        if drone.context.north == "~":
-            Zerg.map_graphs[drone.map].acid.append(north)
-        if drone.context.south == "~":
-            Zerg.map_graphs[drone.map].acid.append(south)
-        if drone.context.east == "~":
-            Zerg.map_graphs[drone.map].acid.append(east)
-        if drone.context.west == "~":
-            Zerg.map_graphs[drone.map].acid.append(west)
+        for direction in north, south, east, west:
+            if direction in TILE_MAP:
+                TILE_MAP[drone.context.north](direction)
 
         if isinstance(drone, Miner) and 'Mine' not in drone.commands:
             path = a_star_search(
