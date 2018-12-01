@@ -168,8 +168,7 @@ class Overlord(Zerg):
 
             dash_title = "MAP {}".format(x)
             self.map_dashboards[x].title(dash_title)
-            self.map_dashboards[x].log.forget()  # Removes text box from parent
-            del self.map_dashboards[x].log
+            self.map_dashboards[x].legend_display.destroy()  # Removes legend from parent
         while refined_minerals > Scout.get_init_cost():
             if len(self.drones) != 3:   # Only 3 scouts will be created
                 z = Scout()
@@ -178,7 +177,7 @@ class Overlord(Zerg):
             else:
                 break
         while refined_minerals > Miner.get_init_cost():
-        # Remaining resources will be spent on miners
+            # Remaining resources will be spent on miners
             z = Miner()
             self.miners[id(z)] = z
             refined_minerals -= Miner.get_init_cost()
@@ -261,7 +260,7 @@ class Overlord(Zerg):
         return result
 
     def update_display(self, drone, north, south, east, west):
-        '''Takes a drone object and will plot it and its neighbors to display '''
+        '''Takes a drone object and will plot it and neighbors to display'''
         x_coord = drone.context.x
         y_coord = drone.context.y
         print_north = Zerg.map_display[drone.map][north[1]][north[0]]
@@ -566,6 +565,7 @@ class Miner(Drone):
         neighbors = {'NORTH': context.north, 'SOUTH': context.south,
                      'EAST': context.east, 'WEST': context.west,
                      'Center': ""}
+        edges = {'NORTH': north, 'SOUTH': south, 'EAST': east, 'WEST': west}
         if (context.x, context.y) == Zerg.starting_locations[self.map]:
             Zerg.landing_clear[self.map] = False
         else:
@@ -611,6 +611,7 @@ class Miner(Drone):
         if goto and neighbors[goto] == "#":
             if 'Mine' in self.commands:
                 Zerg.minerals[self.map].add(self.commands['Mine'][-1])
+                Zerg.map_graphs[self.map].walls.append(edges[goto])
             self.commands = dict()
         if goto and neighbors[goto] == "_":
             Zerg.returns.append(id(self))
@@ -626,5 +627,9 @@ class Dashboard(tkinter.Toplevel):
         super().__init__(parent)
         self.geometry("300x200+300+200")
         self.title("Overlord's Dashboard")
-        self.log = tkinter.Text(self, height=10,  width=30)
-        self.log.pack()
+        legend = {'Drones': 'magenta2', 'Minerals': 'blue', 'Walls': 'gray50',
+                'Ground': 'grey60', 'Acid': 'lawn green', 'Landing': 'gold'}
+        self.legend_display = tkinter.Frame(self, width=100, height=50)
+        self.legend_display.place(x=0, y=0)
+        for item, color in legend.items():
+            tkinter.Label(self.legend_display, text=item, bg=color).pack()
